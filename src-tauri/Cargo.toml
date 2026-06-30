@@ -1,0 +1,50 @@
+[package]
+name = "light-office-tools"
+version = "1.0.0"
+description = "轻量化办公文档工具箱"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "light_office_tools_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["tray-icon", "custom-protocol"] }
+tauri-plugin-dialog = "2.0"
+tauri-plugin-fs = "2.0"
+tauri-plugin-shell = "2.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2"
+time = "=0.3.36"
+lazy_static = "1.4"
+directories = "5.0"
+encoding_rs = "0.8"
+# === 新增：OCR模型下载相关依赖 ===
+reqwest = { version = "0.12", features = ["stream", "rustls-tls"], default-features = false }
+tokio = { version = "1", features = ["full"] }
+sha2 = "0.10"
+futures-util = "0.3"
+# === 新增：Windows打印相关依赖（仅Windows平台） ===
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winspool", "winbase", "wingdi", "winuser", "shellapi", "errhandlingapi", "winreg"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+# 打包体积优化
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+overflow-checks = false
+
+[profile.dev]
+opt-level = 0
