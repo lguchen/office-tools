@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NButton, NIcon, NUpload, NUploadDragger, NSlider, NFormItem, NForm, NTag } from 'naive-ui'
+import { NButton, NIcon, NSlider, NFormItem, NForm, NTag } from 'naive-ui'
 import { FileTrayFullOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import ImagePreview from '../../components/common/ImagePreview.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
+import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
+const settingsStore = useSettingsStore()
+const isDark = computed(() => settingsStore.theme === 'dark')
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -24,8 +28,9 @@ const originalSize = ref(0)
 
 const canCompress = computed(() => inputFile.value !== null)
 
-const handleFileUpload = async (options: any) => {
-  const file = options.file.file as File
+const handleFileUpload = (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  const file = files[0]?.file
+  if (!file) return
   inputFile.value = file
   fileName.value = file.name
   originalSize.value = file.size
@@ -147,23 +152,14 @@ const compressionRatio = computed(() => {
           <NButton @click="handleClear">清空</NButton>
         </div>
 
-        <NUpload
-          :show-file-list="false"
-          :custom-request="handleFileUpload"
-          accept="image/*"
-        >
-          <NUploadDragger>
-            <div class="py-6">
-              <div class="text-3xl mb-2">🖼️</div>
-              <div v-if="fileName" class="text-blue-400">{{ fileName }}</div>
-              <div v-else class="text-gray-400">点击或拖拽图片到此处</div>
-              <div class="text-sm text-gray-500 mt-2">支持 JPG / PNG / WebP / GIF / BMP</div>
-            </div>
-          </NUploadDragger>
-        </NUpload>
+        <FileDropZone
+          accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff"
+          :multiple="false"
+          @files-selected="handleFileUpload"
+        />
 
         <div v-if="inputImageUrl" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between">
+          <div class="text-sm mb-2 flex justify-between" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
             <span>原图预览</span>
             <NTag size="small" type="info">{{ formatFileSize(originalSize) }}</NTag>
           </div>
@@ -185,7 +181,7 @@ const compressionRatio = computed(() => {
           @clear="outputImageUrl = ''"
         />
         <div v-if="outputImageUrl" class="mt-4 flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between">
+          <div class="text-sm mb-2 flex justify-between" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
             <span>压缩结果</span>
             <div class="flex gap-2">
               <NTag size="small" type="success">{{ formatFileSize(outputSize) }}</NTag>
@@ -196,7 +192,7 @@ const compressionRatio = computed(() => {
             <ImagePreview :src="outputImageUrl" />
           </div>
         </div>
-        <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">
+        <div v-else class="mt-4 flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
           压缩结果将显示在这里
         </div>
       </div>

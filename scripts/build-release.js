@@ -74,10 +74,16 @@ function buildTauri(bundleType) {
 function createPortableVersion() {
   logStep('创建便携版...');
   
-  const exePath = path.join(TARGET_DIR, `${APP_NAME}.exe`);
+  let exePath = path.join(TARGET_DIR, `${APP_NAME}.exe`);
   
   if (!fs.existsSync(exePath)) {
-    logError(`可执行文件不存在: ${exePath}`);
+    exePath = path.join(TARGET_DIR, `light-office-tools.exe`);
+  }
+  
+  if (!fs.existsSync(exePath)) {
+    const files = fs.readdirSync(TARGET_DIR).filter(f => f.endsWith('.exe'));
+    logError(`可执行文件不存在: ${APP_NAME}.exe 或 light-office-tools.exe`);
+    logInfo(`目录中的exe文件: ${files.join(', ')}`);
     return null;
   }
   
@@ -86,7 +92,6 @@ function createPortableVersion() {
   
   const destExe = path.join(portableDir, `${APP_NAME}.exe`);
   fs.copyFileSync(exePath, destExe);
-  
   const filesToCopy = [];
   const srcDir = TARGET_DIR;
   const entries = fs.readdirSync(srcDir);

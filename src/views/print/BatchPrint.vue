@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NButton, NIcon, NUpload, NUploadDragger, NFormItem, NForm, NInputNumber, NSpace, NTag, NCard, NModal } from 'naive-ui'
+import { NButton, NIcon, NFormItem, NForm, NInputNumber, NSpace, NTag, NCard, NModal } from 'naive-ui'
 import { PrintOutline, TrashOutline, EyeOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import PrintPreview from '../../components/print/PrintPreview.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -27,16 +28,18 @@ const canPrint = computed(() => files.value.length > 0)
 const pendingCount = computed(() => files.value.filter(f => f.status === 'pending').length)
 const doneCount = computed(() => files.value.filter(f => f.status === 'done').length)
 
-const handleFileUpload = (options: any) => {
-  const file = options.file.file as File
-  const id = Date.now() + Math.random().toString(36).slice(2)
-  files.value.push({
-    id,
-    file,
-    name: file.name,
-    size: file.size,
-    status: 'pending'
-  })
+const handleFileUpload = (fileList: { name: string; path: string; size?: number; file?: File }[]) => {
+  for (const item of fileList) {
+    if (!item.file) continue
+    const id = Date.now() + Math.random().toString(36).slice(2)
+    files.value.push({
+      id,
+      file: item.file,
+      name: item.name,
+      size: item.size || item.file.size,
+      status: 'pending'
+    })
+  }
 }
 
 const removeFile = (id: string) => {
@@ -131,21 +134,13 @@ const getStatusText = (status: string) => {
           <NButton @click="handleClear">清空列表</NButton>
         </div>
 
-        <NUpload
+        <FileDropZone
           :show-file-list="false"
           multiple
-          :custom-request="handleFileUpload"
-        >
-          <NUploadDragger>
-            <div class="py-4">
-              <div class="text-2xl mb-1">📂</div>
-              <div class="opacity-60">点击或拖拽添加多个文件</div>
-              <div class="text-sm opacity-50 mt-1">
-                已添加 {{ files.length }} 个文件
-              </div>
-            </div>
-          </NUploadDragger>
-        </NUpload>
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.gif,.bmp"
+          tips="点击或拖拽添加多个文件"
+          @files-selected="handleFileUpload"
+        />
       </div>
     </template>
 

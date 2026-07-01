@@ -49,7 +49,10 @@ pub fn run() {
             commands::print::save_network_printer,
             commands::print::remove_saved_printer,
             commands::print::get_saved_network_printers,
-            commands::print::test_printer_connection,
+            commands::print::get_cached_printers,
+            commands::print::refresh_printers,
+            commands::print::get_cached_printer_details,
+            commands::print::get_cached_network_printers,
         ])
         .setup(|app| {
             info!("Application setup complete");

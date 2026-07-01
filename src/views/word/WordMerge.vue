@@ -7,9 +7,8 @@
   注意：文档合并需要将多个文档的内容整合到一个文档中
 -->
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import {
-  NUpload,
   NButton,
   NCard,
   NIcon,
@@ -32,7 +31,6 @@ import {
   PageBreak,
   SectionType
 } from 'docx'
-import type { UploadFileInfo } from 'naive-ui'
 import {
   DocumentOutline,
   CreateOutline,
@@ -40,6 +38,9 @@ import {
   GitMergeOutline
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import WordPreview from '../../components/common/WordPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
@@ -47,11 +48,17 @@ const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.theme === 'dark')
 
 // 上传的文件列表
-const fileList = ref<UploadFileInfo[]>([])
+const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
 // 处理结果
 const processResult = ref<{ status: string; message: string } | null>(null)
 // 是否正在处理
 const isProcessing = ref(false)
+// 预览缓冲区
+const previewBuffer = ref<ArrayBuffer | null>(null)
+// 是否分离窗口
+const isDetached = ref(false)
+// DetachablePreview 引用
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
 
 // 合并设置
 const mergeSettings = ref({
@@ -73,8 +80,8 @@ const separatorOptions = [
 ]
 
 // 处理文件上传
-const handleUploadChange = (options: { fileList: UploadFileInfo[] }) => {
-  fileList.value = options.fileList
+const handleFilesSelected = (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  fileList.value = files
   processResult.value = null
 }
 
@@ -166,9 +173,17 @@ const handleMerge = async () => {
       }]
     })
 
+    const blob = await Packer.toBlob(doc)
+    previewBuffer.value = await blob.arrayBuffer()
+
     processResult.value = {
       status: 'success',
       message: `成功合并 ${validFiles.length} 个文档`
+    }
+
+    await nextTick()
+    if (isDetached.value && detachableRef.value) {
+      detachableRef.value.syncContent()
     }
 
     notification.success({ title: '合并完成', content: '文档合并成功，可以下载' })
@@ -256,6 +271,7 @@ const handleDownload = async () => {
 const handleClear = () => {
   fileList.value = []
   processResult.value = null
+  previewBuffer.value = null
 }
 </script>
 
@@ -268,21 +284,11 @@ const handleClear = () => {
           <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
             上传Word文档（至少2个）
           </div>
-          <NUpload
-            :file-list="fileList"
-            @update:file-list="handleUploadChange"
+          <FileDropZone
             accept=".docx"
-            multiple
-            :max="20"
-            directory-dnd
-          >
-            <NButton>
-              <template #icon>
-                <NIcon><DocumentOutline /></NIcon>
-              </template>
-              选择文件或拖拽上传
-            </NButton>
-          </NUpload>
+            :multiple="true"
+            @files-selected="handleFilesSelected"
+          />
           <div class="mt-1 text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
             支持 .docx 格式，最多20个文件，按上传顺序合并
           </div>
@@ -381,77 +387,80 @@ const handleClear = () => {
     </template>
 
     <template #output>
-      <div class="space-y-4">
-        <NAlert v-if="fileList.length < 2" type="info">
-          请上传至少2个Word文档进行合并
-        </NAlert>
-
-        <div v-else>
-          <!-- 文件列表 -->
-          <div class="mb-3">
-            <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
-              待合并文档（{{ fileList.length }}个）
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Word文档预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+            <div class="flex-1 flex items-center gap-2">
+              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                {{ previewBuffer ? '合并结果预览' : '待合并' }}
+              </span>
+              <span v-if="processResult?.status === 'success'" class="text-xs text-green-500">
+                {{ processResult.message }}
+              </span>
+              <span v-else-if="processResult?.status === 'error'" class="text-xs text-red-500">
+                {{ processResult.message }}
+              </span>
             </div>
-            <NList bordered size="small">
-              <NListItem v-for="(file, index) in fileList" :key="index">
-                <template #prefix>
-                  <span class="text-xs px-2 py-1 rounded"
-                    :class="isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'"
-                  >
-                    {{ index + 1 }}
-                  </span>
-                </template>
-                <div class="text-sm">{{ file.name }}</div>
-              </NListItem>
-            </NList>
+            <NButton
+              v-if="previewBuffer"
+              size="small"
+              @click="handleDownload"
+            >
+              <template #icon>
+                <NIcon><DownloadOutline /></NIcon>
+              </template>
+              下载
+            </NButton>
           </div>
 
-          <!-- 合并结果 -->
-          <div v-if="processResult">
-            <NCard size="small" :class="processResult.status === 'success' ? 'border-green-500' : 'border-red-500'">
-              <div class="flex items-center gap-3">
-                <NIcon
-                  :size="20"
-                  :class="processResult.status === 'success' ? 'text-green-500' : 'text-red-500'"
+          <div class="flex-1 min-h-0 flex flex-col">
+            <div v-if="fileList.length > 0" class="px-3 py-2 border-b flex-shrink-0"
+                 :class="isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50'">
+              <div class="text-xs font-medium mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                待合并文档（{{ fileList.length }}个）
+              </div>
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="(file, index) in fileList"
+                  :key="index"
+                  class="text-xs px-2 py-0.5 rounded"
+                  :class="isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'"
                 >
-                  <GitMergeOutline />
-                </NIcon>
-                <div>
-                  <div class="font-medium text-sm">
-                    {{ processResult.status === 'success' ? '合并成功' : '合并失败' }}
+                  {{ index + 1 }}. {{ file.name }}
+                </span>
+              </div>
+            </div>
+
+            <div class="flex-1 min-h-0">
+              <WordPreview
+                v-if="previewBuffer"
+                :array-buffer="previewBuffer"
+                class="h-full"
+              />
+              <div v-else class="h-full flex items-center justify-center"
+                   :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+                <div class="text-center text-sm space-y-2">
+                  <div v-if="fileList.length < 2">
+                    请上传至少2个Word文档进行合并
                   </div>
-                  <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                    {{ processResult.message }}
+                  <div v-else>
+                    <div>点击「合并文档」按钮生成预览</div>
+                    <div class="text-xs opacity-70 mt-2">
+                      合并说明：文档按上传顺序依次合并，可选择是否添加章节标题
+                    </div>
                   </div>
-                </div>
-                <div class="ml-auto">
-                  <NButton
-                    v-if="processResult.status === 'success'"
-                    type="primary"
-                    size="small"
-                    @click="handleDownload"
-                  >
-                    <template #icon>
-                      <NIcon><DownloadOutline /></NIcon>
-                    </template>
-                    下载合并文档
-                  </NButton>
                 </div>
               </div>
-            </NCard>
-          </div>
-
-          <!-- 合并说明 -->
-          <NCard size="small" title="合并说明" v-if="!processResult">
-            <div class="text-sm space-y-1" :class="isDark ? 'text-gray-300' : 'text-gray-600'">
-              <p>1. 文档按上传顺序依次合并</p>
-              <p>2. 可选择是否添加章节标题</p>
-              <p>3. 分节符允许每个文档有不同的页面设置</p>
-              <p>4. 合并后可下载统一文档</p>
             </div>
-          </NCard>
+          </div>
         </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>

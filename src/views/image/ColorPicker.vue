@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { NButton, NIcon, NUpload, NUploadDragger, NTag, NCard, NSpace } from 'naive-ui'
+import { ref, computed } from 'vue'
+import { NButton, NIcon, NTag, NCard, NSpace } from 'naive-ui'
 import { CreateOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
 import { useNotification } from 'naive-ui'
+import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
+const settingsStore = useSettingsStore()
+const isDark = computed(() => settingsStore.theme === 'dark')
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -20,8 +24,9 @@ const hslColor = ref('hsl(0, 0%, 0%)')
 const colorHistory = ref<string[]>([])
 const isPicking = ref(false)
 
-const handleFileUpload = (options: any) => {
-  const file = options.file.file as File
+const handleFileUpload = (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  const file = files[0]?.file
+  if (!file) return
   inputFile.value = file
   fileName.value = file.name
 
@@ -150,19 +155,11 @@ const pickFromHistory = (color: string) => {
           <NButton @click="handleClear">清空</NButton>
         </div>
 
-        <NUpload
-          :show-file-list="false"
-          :custom-request="handleFileUpload"
-          accept="image/*"
-        >
-          <NUploadDragger>
-            <div class="py-4">
-              <div class="text-2xl mb-1">🎨</div>
-              <div v-if="fileName" class="text-blue-400 text-sm">{{ fileName }}</div>
-              <div v-else class="text-gray-400 text-sm">上传图片开始取色</div>
-            </div>
-          </NUploadDragger>
-        </NUpload>
+        <FileDropZone
+          accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.svg,.ico"
+          :multiple="false"
+          @files-selected="handleFileUpload"
+        />
 
         <div
           v-if="imageUrl"
@@ -191,21 +188,21 @@ const pickFromHistory = (color: string) => {
           />
           <div class="p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-400">HEX</span>
+              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">HEX</span>
               <div class="flex items-center gap-2">
                 <span class="font-mono">{{ pickedColor }}</span>
                 <NButton size="tiny" text @click="copyColor(pickedColor)">复制</NButton>
               </div>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-400">RGB</span>
+              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">RGB</span>
               <div class="flex items-center gap-2">
                 <span class="font-mono text-sm">{{ rgbColor }}</span>
                 <NButton size="tiny" text @click="copyColor(rgbColor)">复制</NButton>
               </div>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-400">HSL</span>
+              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">HSL</span>
               <div class="flex items-center gap-2">
                 <span class="font-mono text-sm">{{ hslColor }}</span>
                 <NButton size="tiny" text @click="copyColor(hslColor)">复制</NButton>
@@ -215,7 +212,7 @@ const pickFromHistory = (color: string) => {
         </NCard>
 
         <div v-if="colorHistory.length > 0">
-          <div class="text-sm text-gray-400 mb-2">历史颜色</div>
+          <div class="text-sm mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">历史颜色</div>
           <div class="flex flex-wrap gap-2">
             <div
               v-for="color in colorHistory"

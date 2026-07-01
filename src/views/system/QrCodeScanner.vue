@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NButton, NIcon, NUpload, NUploadDragger, NTag } from 'naive-ui'
+import { NButton, NIcon, NTag } from 'naive-ui'
 import { SearchOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -17,8 +18,9 @@ const isProcessing = ref(false)
 
 const canScan = computed(() => inputFile.value !== null)
 
-const handleFileUpload = (options: any) => {
-  const file = options.file.file as File
+const handleFileUpload = (fileList: { name: string; path: string; size?: number; file?: File }[]) => {
+  if (fileList.length === 0 || !fileList[0].file) return
+  const file = fileList[0].file
   inputFile.value = file
   fileName.value = file.name
   resultText.value = ''
@@ -87,20 +89,12 @@ const isUrl = (text: string): boolean => {
           <NButton @click="handleClear">清空</NButton>
         </div>
 
-        <NUpload
+        <FileDropZone
           :show-file-list="false"
-          :custom-request="handleFileUpload"
-          accept="image/*"
-        >
-          <NUploadDragger>
-            <div class="py-6">
-              <div class="text-3xl mb-2">📷</div>
-              <div v-if="fileName" class="text-blue-400">{{ fileName }}</div>
-              <div v-else class="text-gray-400">点击或拖拽二维码图片到此处</div>
-              <div class="text-sm text-gray-500 mt-2">支持 PNG JPG GIF 等格式</div>
-            </div>
-          </NUploadDragger>
-        </NUpload>
+          accept=".png,.jpg,.jpeg,.gif,.bmp"
+          tips="点击或拖拽二维码图片到此处"
+          @files-selected="handleFileUpload"
+        />
 
         <div v-if="imageUrl" class="flex-1 min-h-0 overflow-auto bg-gray-800 rounded-lg p-4 flex items-center justify-center">
           <img :src="imageUrl" class="max-w-full max-h-64 object-contain" />

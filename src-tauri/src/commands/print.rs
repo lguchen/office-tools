@@ -1,7 +1,10 @@
+// 打印相关命令
+// 优化说明：添加打印机缓存机制，配置存放在软件运行目录下的config目录
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -26,16 +29,51 @@ pub struct PrinterInfo {
     pub status: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PrinterCache {
+    printers: Vec<String>,
+    printer_details: Vec<PrinterInfo>,
+    network_printers: Vec<NetworkPrinter>,
+    timestamp: u64,
+}
+
 fn get_config_dir() -> PathBuf {
     let mut path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     path.push("config");
     let _ = fs::create_dir_all(&path);
+    path
+}
+
+fn get_printer_cache_path() -> PathBuf {
+    let mut path = get_config_dir();
+    path.push("printer_cache.json");
+    path
+}
+
+fn get_network_printers_path() -> PathBuf {
+    let mut path = get_config_dir();
     path.push("network_printers.json");
     path
 }
 
+fn load_printer_cache() -> Option<PrinterCache> {
+    let path = get_printer_cache_path();
+    if let Ok(content) = fs::read_to_string(&path) {
+        serde_json::from_str(&content).ok()
+    } else {
+        None
+    }
+}
+
+fn save_printer_cache(cache: &PrinterCache) -> Result<(), String> {
+    let path = get_printer_cache_path();
+    let content = serde_json::to_string_pretty(cache).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn load_saved_printers() -> Vec<NetworkPrinter> {
-    let path = get_config_dir();
+    let path = get_network_printers_path();
     if let Ok(content) = fs::read_to_string(&path) {
         serde_json::from_str(&content).unwrap_or_default()
     } else {
@@ -44,10 +82,109 @@ fn load_saved_printers() -> Vec<NetworkPrinter> {
 }
 
 fn save_printers_to_file(printers: &[NetworkPrinter]) -> Result<(), String> {
-    let path = get_config_dir();
+    let path = get_network_printers_path();
     let content = serde_json::to_string_pretty(printers).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn timestamp_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+#[cfg(target_os = "windows")]
+fn get_printers_wmic() -> Result<Vec<String>, String> {
+    let output = Command::new("wmic")
+        .args(&["printer", "get", "name"])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("Failed to get printers: {}", e))?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let printers: Vec<String> = text
+        .lines()
+        .skip(1)
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    Ok(printers)
+}
+
+#[cfg(target_os = "windows")]
+fn get_printer_details_wmic() -> Result<Vec<PrinterInfo>, String> {
+    let output = Command::new("wmic")
+        .args(&["printer", "get", "name,default,network,status", "/format:csv"])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("Failed to get printer details: {}", e))?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut printers: Vec<PrinterInfo> = Vec::new();
+    
+    for (i, line) in text.lines().enumerate() {
+        if i == 0 || line.trim().is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() >= 5 {
+            let name = parts[1].trim().to_string();
+            let is_network = parts[2].trim().eq_ignore_ascii_case("true");
+            let is_default = parts[3].trim().eq_ignore_ascii_case("true");
+            let status = parts[4].trim().to_string();
+            printers.push(PrinterInfo {
+                name,
+                is_network,
+                is_default,
+                status,
+            });
+        }
+    }
+
+    Ok(printers)
+}
+
+#[cfg(target_os = "windows")]
+fn fetch_network_printers() -> Result<Vec<NetworkPrinter>, String> {
+    let details = get_printer_details_wmic()?;
+    let saved = load_saved_printers();
+    let saved_map: HashMap<String, NetworkPrinter> = saved
+        .iter()
+        .map(|p| (p.address.clone(), p.clone()))
+        .collect();
+    
+    let mut printers: Vec<NetworkPrinter> = Vec::new();
+    
+    for printer in &details {
+        if printer.is_network {
+            let id = format!("net_{}", printer.name.replace("\\", "_").replace(" ", "_"));
+            let address = printer.name.clone();
+            
+            let saved_printer = saved_map.get(&address);
+            printers.push(NetworkPrinter {
+                id,
+                name: printer.name.clone(),
+                address,
+                location: None,
+                online: true,
+                saved: saved_printer.is_some(),
+            });
+        }
+    }
+    
+    for saved_printer in saved {
+        if !printers.iter().any(|p| p.address == saved_printer.address) {
+            let mut p = saved_printer.clone();
+            p.online = false;
+            p.saved = true;
+            printers.push(p);
+        }
+    }
+    
+    Ok(printers)
 }
 
 #[tauri::command]
@@ -216,31 +353,67 @@ fn print_text_windows(file_path: &str, printer: Option<&str>) -> Result<(), Stri
     }
 }
 
-fn timestamp_millis() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 #[tauri::command]
 pub fn get_printers() -> Result<Vec<String>, String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("wmic")
-            .args(&["printer", "get", "name"])
-            .output()
-            .map_err(|e| format!("Failed to get printers: {}", e))?;
+        get_printers_wmic()
+    }
 
-        let text = String::from_utf8_lossy(&output.stdout);
-        let printers: Vec<String> = text
-            .lines()
-            .skip(1)
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect();
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Printer listing is only supported on Windows".to_string())
+    }
+}
 
+#[tauri::command]
+pub fn get_cached_printers() -> Result<Vec<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(cache) = load_printer_cache() {
+            let now = timestamp_millis();
+            if now - cache.timestamp < 300000 {
+                return Ok(cache.printers);
+            }
+        }
+        
+        let printers = get_printers_wmic()?;
+        let details = get_printer_details_wmic().unwrap_or_default();
+        let network = fetch_network_printers().unwrap_or_default();
+        
+        let cache = PrinterCache {
+            printers: printers.clone(),
+            printer_details: details,
+            network_printers: network,
+            timestamp: timestamp_millis(),
+        };
+        let _ = save_printer_cache(&cache);
+        
+        Ok(printers)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Printer listing is only supported on Windows".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn refresh_printers() -> Result<Vec<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let printers = get_printers_wmic()?;
+        let details = get_printer_details_wmic().unwrap_or_default();
+        let network = fetch_network_printers().unwrap_or_default();
+        
+        let cache = PrinterCache {
+            printers: printers.clone(),
+            printer_details: details,
+            network_printers: network,
+            timestamp: timestamp_millis(),
+        };
+        let _ = save_printer_cache(&cache);
+        
         Ok(printers)
     }
 
@@ -254,34 +427,39 @@ pub fn get_printers() -> Result<Vec<String>, String> {
 pub fn get_printer_details() -> Result<Vec<PrinterInfo>, String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("wmic")
-            .args(&["printer", "get", "name,default,network,status", "/format:csv"])
-            .output()
-            .map_err(|e| format!("Failed to get printer details: {}", e))?;
+        get_printer_details_wmic()
+    }
 
-        let text = String::from_utf8_lossy(&output.stdout);
-        let mut printers: Vec<PrinterInfo> = Vec::new();
-        
-        for (i, line) in text.lines().enumerate() {
-            if i == 0 || line.trim().is_empty() {
-                continue;
-            }
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 5 {
-                let name = parts[1].trim().to_string();
-                let is_network = parts[2].trim().eq_ignore_ascii_case("true");
-                let is_default = parts[3].trim().eq_ignore_ascii_case("true");
-                let status = parts[4].trim().to_string();
-                printers.push(PrinterInfo {
-                    name,
-                    is_network,
-                    is_default,
-                    status,
-                });
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Printer details are only supported on Windows".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn get_cached_printer_details() -> Result<Vec<PrinterInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(cache) = load_printer_cache() {
+            let now = timestamp_millis();
+            if now - cache.timestamp < 300000 {
+                return Ok(cache.printer_details);
             }
         }
-
-        Ok(printers)
+        
+        let printers = get_printers_wmic().unwrap_or_default();
+        let details = get_printer_details_wmic()?;
+        let network = fetch_network_printers().unwrap_or_default();
+        
+        let cache = PrinterCache {
+            printers,
+            printer_details: details.clone(),
+            network_printers: network,
+            timestamp: timestamp_millis(),
+        };
+        let _ = save_printer_cache(&cache);
+        
+        Ok(details)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -294,70 +472,39 @@ pub fn get_printer_details() -> Result<Vec<PrinterInfo>, String> {
 pub fn scan_network_printers() -> Result<Vec<NetworkPrinter>, String> {
     #[cfg(target_os = "windows")]
     {
-        let mut printers: Vec<NetworkPrinter> = Vec::new();
-        let saved = load_saved_printers();
-        let saved_map: HashMap<String, NetworkPrinter> = saved
-            .iter()
-            .map(|p| (p.address.clone(), p.clone()))
-            .collect();
+        fetch_network_printers()
+    }
 
-        let output = Command::new("wmic")
-            .args(&["printer", "get", "name,portname,location", "/format:csv"])
-            .output()
-            .map_err(|e| format!("Failed to scan printers: {}", e))?;
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Network printer scanning is only supported on Windows".to_string())
+    }
+}
 
-        let text = String::from_utf8_lossy(&output.stdout);
+#[tauri::command]
+pub fn get_cached_network_printers() -> Result<Vec<NetworkPrinter>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(cache) = load_printer_cache() {
+            let now = timestamp_millis();
+            if now - cache.timestamp < 300000 {
+                return Ok(cache.network_printers);
+            }
+        }
         
-        for (i, line) in text.lines().enumerate() {
-            if i == 0 || line.trim().is_empty() {
-                continue;
-            }
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 4 {
-                let name = parts[1].trim().to_string();
-                let portname = parts[2].trim().to_string();
-                let location = if parts[3].trim().is_empty() {
-                    None
-                } else {
-                    Some(parts[3].trim().to_string())
-                };
-
-                let is_network = portname.starts_with("\\\\") || 
-                                 portname.starts_with("IP_") ||
-                                 portname.contains("://") ||
-                                 name.starts_with("\\\\");
-
-                if is_network {
-                    let id = format!("net_{}", name.replace("\\", "_").replace(" ", "_"));
-                    let address = if name.starts_with("\\\\") {
-                        name.clone()
-                    } else {
-                        portname.clone()
-                    };
-                    
-                    let saved_printer = saved_map.get(&address);
-                    printers.push(NetworkPrinter {
-                        id,
-                        name: name.clone(),
-                        address,
-                        location,
-                        online: true,
-                        saved: saved_printer.is_some(),
-                    });
-                }
-            }
-        }
-
-        for saved_printer in saved {
-            if !printers.iter().any(|p| p.address == saved_printer.address) {
-                let mut p = saved_printer.clone();
-                p.online = false;
-                p.saved = true;
-                printers.push(p);
-            }
-        }
-
-        Ok(printers)
+        let network = fetch_network_printers()?;
+        let printers = get_printers_wmic().unwrap_or_default();
+        let details = get_printer_details_wmic().unwrap_or_default();
+        
+        let cache = PrinterCache {
+            printers,
+            printer_details: details,
+            network_printers: network.clone(),
+            timestamp: timestamp_millis(),
+        };
+        let _ = save_printer_cache(&cache);
+        
+        Ok(network)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -400,6 +547,7 @@ pub fn add_network_printer(unc_path: String) -> Result<bool, String> {
                 });
                 let _ = save_printers_to_file(&saved);
             }
+            let _ = refresh_printers();
             Ok(true)
         } else {
             Err(format!(
@@ -457,6 +605,7 @@ pub fn test_printer_connection(printer_name: String) -> Result<bool, String> {
                 "get",
                 "status",
             ])
+            .creation_flags(0x08000000)
             .output()
             .map_err(|e| format!("Failed to check printer status: {}", e))?;
 

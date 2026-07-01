@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { NButton, NIcon, NUpload, NRadioGroup, NRadio, NInput, NInputNumber, NSpace, NTag, NDataTable, NScrollbar, NSelect } from 'naive-ui'
-import { CloudUploadOutline, DownloadOutline, ColorPaletteOutline } from '@vicons/ionicons5'
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { NButton, NIcon, NRadioGroup, NRadio, NInput, NInputNumber, NSpace, NTag, NSelect } from 'naive-ui'
+import { DownloadOutline, ColorPaletteOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import ExcelPreview from '../../components/common/ExcelPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useNotification } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
@@ -43,39 +46,29 @@ const colorOptions = [
 // 高亮的单元格（用于预览）
 const highlightedCells = ref<Set<string>>(new Set())
 
-// 计算表格列定义
-const tableColumns = computed(() => {
-  if (headers.value.length === 0) return []
-  return headers.value.map((header, idx) => ({
-    title: header || `列${idx + 1}`,
-    key: `col_${idx}`,
-    width: 120,
-    ellipsis: { tooltip: true },
-    render: (row: any, rowIndex: number) => {
-      const cellKey = `${rowIndex}_${idx}`
-      const value = row[`col_${idx}`] ?? ''
-      const isHighlighted = highlightedCells.value.has(cellKey)
+// 预览模式
+const previewMode = ref<'original' | 'formatted'>('formatted')
+const isDetached = ref(false)
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
 
-      if (isHighlighted) {
-        return {
-          type: 'html',
-          value: `<span style="background-color: ${highlightColor.value}; padding: 2px 4px; border-radius: 2px;">${value}</span>`
-        }
+// 带高亮标记的数据（高亮单元格前加 ★）
+const highlightedData = computed(() => {
+  return fileData.value.map((row, rowIdx) => {
+    return row.map((cell, colIdx) => {
+      const cellKey = `${rowIdx}_${colIdx}`
+      if (highlightedCells.value.has(cellKey)) {
+        return `★ ${cell ?? ''}`
       }
-      return value
-    }
-  }))
+      return cell
+    })
+  })
 })
 
-// 表格数据
-const tableData = computed(() => {
-  return fileData.value.map((row, rowIdx) => {
-    const rowData: Record<string, any> = { __key: rowIdx }
-    row.forEach((cell, colIdx) => {
-      rowData[`col_${colIdx}`] = cell
-    })
-    return rowData
-  })
+// 预览数据（含表头）
+const previewData = computed(() => {
+  const data = previewMode.value === 'formatted' ? highlightedData.value : fileData.value
+  if (data.length === 0) return null
+  return [headers.value, ...data]
 })
 
 // 应用条件格式规则
@@ -169,17 +162,25 @@ const applyRule = () => {
   }
 }
 
-// 监听规则变化，自动应用
-watch([selectedRule, thresholdValue, searchText, rangeMin, rangeMax], () => {
+// 监听规则变化，自动应用（防抖，大数据量避免频繁计算）
+let debounceTimer: number | null = null
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+})
+
+watch([selectedRule, thresholdValue, searchText, rangeMin, rangeMax, highlightColor], () => {
   if (fileData.value.length > 0) {
-    applyRule()
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = window.setTimeout(() => {
+      applyRule()
+    }, 150)
   }
 })
 
 // 文件上传处理
-const handleFileUpload = async (options: any) => {
-  const file = options.file.file as File
-  if (!file) return
+const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  if (files.length === 0 || !files[0].file) return
+  const file = files[0].file
 
   const validExtensions = ['.xlsx', '.xls', '.csv']
   const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
@@ -390,24 +391,13 @@ const handleClear = () => {
         </div>
 
         <!-- 上传区域 -->
-        <NUpload
-          :show-file-list="false"
-          :custom-request="handleFileUpload"
+        <FileDropZone
           accept=".xlsx,.xls,.csv"
+          :multiple="false"
+          tips="选择文件或拖拽上传"
+          @files-selected="handleFilesSelected"
           class="flex-shrink-0"
-        >
-          <div
-            class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
-            :class="isDark ? 'border-gray-600 hover:border-blue-500 bg-gray-700' : 'border-gray-300 hover:border-blue-500 bg-gray-50'"
-          >
-            <NIcon :size="32" class="mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-              <CloudUploadOutline />
-            </NIcon>
-            <div v-if="fileName" class="text-blue-400">{{ fileName }}</div>
-            <div v-else :class="isDark ? 'text-gray-400' : 'text-gray-500'">点击上传Excel文件</div>
-            <div class="text-xs mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">支持 .xlsx / .xls / .csv</div>
-          </div>
-        </NUpload>
+        />
 
         <!-- 统计信息 -->
         <div v-if="highlightedCells.size > 0" class="mt-2 flex gap-2">
@@ -435,43 +425,68 @@ const handleClear = () => {
     </template>
 
     <template #output>
-      <div class="h-full flex flex-col">
-        <!-- 数据预览 -->
-        <div v-if="fileData.length > 0" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between items-center">
-            <span>数据预览（高亮效果）</span>
-            <NTag size="small" type="info">{{ fileData.length }} 行</NTag>
-          </div>
-          <div class="flex-1 border rounded-lg overflow-hidden" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
-            <NScrollbar class="h-full">
-              <NDataTable
-                :columns="tableColumns"
-                :data="tableData.slice(0, 200)"
-                :bordered="false"
-                size="small"
-                :max-height="400"
-                virtual-scroll
-              />
-            </NScrollbar>
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Excel条件格式预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+            <NButton
+              size="small"
+              :type="previewMode === 'original' ? 'primary' : 'default'"
+              @click="previewMode = 'original'"
+            >
+              原始数据
+            </NButton>
+            <NButton
+              size="small"
+              :type="previewMode === 'formatted' ? 'primary' : 'default'"
+              @click="previewMode = 'formatted'"
+              :disabled="fileData.length === 0"
+            >
+              条件格式结果
+            </NButton>
+            <div class="flex-1"></div>
+            <NTag v-if="highlightedCells.size > 0 && previewMode === 'formatted'" size="small" type="warning">
+              {{ highlightedCells.size }} 个高亮
+            </NTag>
+            <NTag v-if="fileData.length > 0" size="small" type="info">
+              {{ fileData.length }} 行
+            </NTag>
+            <NButton
+              v-if="fileData.length > 0"
+              size="small"
+              @click="handleExport"
+            >
+              <template #icon>
+                <NIcon><DownloadOutline /></NIcon>
+              </template>
+              导出
+            </NButton>
           </div>
 
-          <!-- 提示 -->
-          <div class="mt-2 text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
-            <NIcon><ColorPaletteOutline /></NIcon>
-            提示：预览中显示高亮效果，导出时需要xlsx-js-style库支持样式
+          <div class="flex-1 min-h-0">
+            <ExcelPreview
+              v-if="previewData"
+              :data="previewData"
+              class="h-full"
+            />
+            <div v-else class="h-full flex items-center justify-center"
+                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+              <div class="text-center">
+                <NIcon :size="48" class="mb-2 opacity-50">
+                  <ColorPaletteOutline />
+                </NIcon>
+                <div class="text-sm">上传Excel文件后可预览条件格式效果</div>
+                <div class="text-xs mt-1 opacity-70">高亮单元格使用 ★ 标记提示</div>
+              </div>
+            </div>
           </div>
         </div>
-
-        <!-- 空状态 -->
-        <div v-else class="flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
-          <div class="text-center">
-            <NIcon :size="48" class="mb-2 opacity-50">
-              <ColorPaletteOutline />
-            </NIcon>
-            <div>上传Excel文件后可预览条件格式效果</div>
-          </div>
-        </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>

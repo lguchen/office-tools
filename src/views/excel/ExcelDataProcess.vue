@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { NButton, NIcon, NUpload, NCheckbox, NCheckboxGroup, NTag, NDataTable, NScrollbar } from 'naive-ui'
-import { TrashOutline, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { NButton, NIcon, NCheckbox, NCheckboxGroup, NTag } from 'naive-ui'
+import { TrashOutline, DownloadOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
-import ActionBar from '../../components/common/ActionBar.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import ExcelPreview from '../../components/common/ExcelPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useNotification } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
@@ -14,14 +16,16 @@ const notification = useNotification()
 const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.theme === 'dark')
 
-// 文件数据
 const fileName = ref('')
 const fileData = ref<any[][]>([])
 const headers = ref<string[]>([])
 const processedData = ref<any[][]>([])
 const isProcessing = ref(false)
+const realtimePreview = ref(true)
+const isDetached = ref(false)
+const previewMode = ref<'original' | 'processed'>('processed')
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
 
-// 处理选项
 const processOptions = ref<string[]>([])
 const availableOptions = [
   { label: '删除重复行', value: 'removeDuplicates' },
@@ -34,65 +38,31 @@ const availableOptions = [
   { label: '按第一列降序排序', value: 'sortDesc' }
 ]
 
-// 表格列定义
-const tableColumns = computed(() => {
-  if (headers.value.length === 0) return []
-  return headers.value.map((header, idx) => ({
-    title: header || `列${idx + 1}`,
-    key: `col_${idx}`,
-    render: (row: any) => row[`col_${idx}`] ?? ''
-  }))
+let debounceTimer: number | null = null
+
+const debounceProcess = () => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = window.setTimeout(() => {
+    if (realtimePreview.value && fileData.value.length > 0 && processOptions.value.length > 0) {
+      doProcess(false)
+    }
+  }, 300)
+}
+
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
 })
 
-// 表格数据
-const tableData = computed(() => {
-  return processedData.value.map((row, rowIdx) => {
-    const rowData: Record<string, any> = { __key: rowIdx }
-    row.forEach((cell, colIdx) => {
-      rowData[`col_${colIdx}`] = cell
-    })
-    return rowData
-  })
-})
+watch([processOptions, fileData], () => {
+  if (realtimePreview.value) {
+    debounceProcess()
+  }
+}, { deep: true })
 
-// 原始表格数据
-const originalTableData = computed(() => {
-  return fileData.value.map((row, rowIdx) => {
-    const rowData: Record<string, any> = { __key: rowIdx }
-    row.forEach((cell, colIdx) => {
-      rowData[`col_${colIdx}`] = cell
-    })
-    return rowData
-  })
-})
+const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  if (files.length === 0 || !files[0].file) return
 
-// 原始表格列
-const originalTableColumns = computed(() => {
-  const colCount = fileData.value[0]?.length || 0
-  return Array.from({ length: colCount }, (_, idx) => ({
-    title: headers.value[idx] || `列${idx + 1}`,
-    key: `col_${idx}`,
-    width: 120,
-    ellipsis: { tooltip: true }
-  }))
-})
-
-// 处理后的表格列
-const processedTableColumns = computed(() => {
-  const colCount = processedData.value[0]?.length || 0
-  return Array.from({ length: colCount }, (_, idx) => ({
-    title: headers.value[idx] || `列${idx + 1}`,
-    key: `col_${idx}`,
-    width: 120,
-    ellipsis: { tooltip: true }
-  }))
-})
-
-// 文件上传处理
-const handleFileUpload = async (options: any) => {
-  const file = options.file.file as File
-  if (!file) return
-
+  const file = files[0].file
   const validExtensions = ['.xlsx', '.xls', '.csv']
   const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
 
@@ -109,7 +79,6 @@ const handleFileUpload = async (options: any) => {
     const firstSheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[firstSheetName]
 
-    // 转换为二维数组
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
 
     if (jsonData.length === 0) {
@@ -117,9 +86,8 @@ const handleFileUpload = async (options: any) => {
       return
     }
 
-    // 第一行作为表头
     headers.value = (jsonData[0] as string[]).map((h, idx) => h?.toString() || `列${idx + 1}`)
-    fileData.value = jsonData.slice(1) // 去掉表头行
+    fileData.value = jsonData.slice(1)
     processedData.value = [...fileData.value.map(row => [...row])]
 
     notification.success({ title: '导入成功', content: `已导入 ${fileData.value.length} 行数据` })
@@ -128,15 +96,14 @@ const handleFileUpload = async (options: any) => {
   }
 }
 
-// 执行数据处理
-const handleProcess = () => {
+const doProcess = (showNotification: boolean) => {
   if (fileData.value.length === 0) {
-    notification.warning({ title: '无数据', content: '请先导入Excel文件' })
+    if (showNotification) notification.warning({ title: '无数据', content: '请先导入Excel文件' })
     return
   }
 
   if (processOptions.value.length === 0) {
-    notification.warning({ title: '未选择处理项', content: '请至少选择一项处理选项' })
+    if (showNotification) notification.warning({ title: '未选择处理项', content: '请至少选择一项处理选项' })
     return
   }
 
@@ -144,8 +111,8 @@ const handleProcess = () => {
 
   try {
     let data = [...fileData.value.map(row => [...row])]
+    let dataHeaders = [...headers.value]
 
-    // 删除重复行
     if (processOptions.value.includes('removeDuplicates')) {
       const seen = new Set<string>()
       data = data.filter(row => {
@@ -156,25 +123,20 @@ const handleProcess = () => {
       })
     }
 
-    // 删除空行
     if (processOptions.value.includes('removeEmptyRows')) {
       data = data.filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''))
     }
 
-    // 删除空列
     if (processOptions.value.includes('removeEmptyCols')) {
       const colCount = data[0]?.length || 0
       const emptyCols: number[] = []
-
       for (let col = 0; col < colCount; col++) {
         const isEmpty = data.every(row => row[col] === null || row[col] === undefined || row[col] === '')
         if (isEmpty) emptyCols.push(col)
       }
-
-      // 从后往前删除空列
       for (let i = emptyCols.length - 1; i >= 0; i--) {
         const colIndex = emptyCols[i]
-        headers.value.splice(colIndex, 1)
+        dataHeaders.splice(colIndex, 1)
         data = data.map(row => {
           row.splice(colIndex, 1)
           return row
@@ -182,28 +144,24 @@ const handleProcess = () => {
       }
     }
 
-    // 去除首尾空格
     if (processOptions.value.includes('trimSpaces')) {
       data = data.map(row =>
         row.map(cell => typeof cell === 'string' ? cell.trim() : cell)
       )
     }
 
-    // 转大写
     if (processOptions.value.includes('toUpperCase')) {
       data = data.map(row =>
         row.map(cell => typeof cell === 'string' ? cell.toUpperCase() : cell)
       )
     }
 
-    // 转小写
     if (processOptions.value.includes('toLowerCase')) {
       data = data.map(row =>
         row.map(cell => typeof cell === 'string' ? cell.toLowerCase() : cell)
       )
     }
 
-    // 排序
     if (processOptions.value.includes('sortAsc')) {
       data.sort((a, b) => {
         const aVal = a[0] ?? ''
@@ -220,32 +178,40 @@ const handleProcess = () => {
 
     processedData.value = data
 
-    const stats = []
-    if (processOptions.value.includes('removeDuplicates')) {
-      const removed = fileData.value.length - data.length
-      if (removed > 0) stats.push(`删除 ${removed} 行重复数据`)
+    if (showNotification) {
+      const stats = []
+      if (processOptions.value.includes('removeDuplicates')) {
+        const removed = fileData.value.length - data.length
+        if (removed > 0) stats.push(`删除 ${removed} 行重复数据`)
+      }
+      if (processOptions.value.includes('removeEmptyRows')) {
+        stats.push('已删除空行')
+      }
+      notification.success({
+        title: '处理完成',
+        content: stats.length > 0 ? stats.join('，') : `处理完成，共 ${data.length} 行数据`
+      })
     }
-    if (processOptions.value.includes('removeEmptyRows')) {
-      stats.push('已删除空行')
-    }
-
-    notification.success({
-      title: '处理完成',
-      content: stats.length > 0 ? stats.join('，') : `处理完成，共 ${data.length} 行数据`
-    })
   } catch (e) {
-    notification.error({ title: '处理失败', content: (e as Error).message })
+    if (showNotification) {
+      notification.error({ title: '处理失败', content: (e as Error).message })
+    }
   } finally {
     isProcessing.value = false
   }
 }
 
-// 导出Excel
+const handleProcess = () => {
+  doProcess(true)
+}
+
 const handleDownload = async () => {
-  if (processedData.value.length === 0) {
+  if (previewMode.value === 'processed' ? processedData.value.length === 0 : fileData.value.length === 0) {
     notification.warning({ title: '无数据', content: '没有可导出的数据' })
     return
   }
+
+  const data = previewMode.value === 'processed' ? processedData.value : fileData.value
 
   try {
     const defaultName = fileName.value.replace(/\.[^.]+$/, '') + '_processed.xlsx'
@@ -255,14 +221,11 @@ const handleDownload = async () => {
     })
 
     if (savePath) {
-      // 创建工作簿
       const wb = XLSX.utils.book_new()
-      // 将表头和数据合并
-      const wsData = [headers.value, ...processedData.value]
+      const wsData = [headers.value, ...data]
       const ws = XLSX.utils.aoa_to_sheet(wsData)
       XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
 
-      // 生成文件
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
       await writeFile(savePath, new Uint8Array(wbout))
 
@@ -273,7 +236,6 @@ const handleDownload = async () => {
   }
 }
 
-// 清空数据
 const handleClear = () => {
   fileName.value = ''
   fileData.value = []
@@ -281,15 +243,43 @@ const handleClear = () => {
   processedData.value = []
   processOptions.value = []
 }
+
+const previewData = computed(() => {
+  const data = previewMode.value === 'processed' && processedData.value.length > 0
+    ? processedData.value
+    : fileData.value
+  if (data.length === 0) return null
+  return [headers.value, ...data]
+})
 </script>
 
 <template>
   <ToolLayout title="Excel批量数据处理" description="导入Excel文件，批量处理数据并导出">
     <template #input>
       <div class="space-y-4 h-full flex flex-col">
-        <!-- 处理选项 -->
         <div class="flex-shrink-0">
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">处理选项</div>
+          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            上传Excel文件
+          </div>
+          <FileDropZone
+            accept=".xlsx,.xls,.csv"
+            :multiple="false"
+            tips="选择文件或拖拽上传"
+            @files-selected="handleFilesSelected"
+          />
+        </div>
+
+        <div class="flex-shrink-0">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">处理选项</div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" v-model="realtimePreview" class="sr-only peer" />
+                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+              </label>
+            </div>
+          </div>
           <NCheckboxGroup v-model:value="processOptions" class="grid grid-cols-2 gap-2">
             <NCheckbox
               v-for="opt in availableOptions"
@@ -300,7 +290,6 @@ const handleClear = () => {
           </NCheckboxGroup>
         </div>
 
-        <!-- 操作按钮 -->
         <div class="flex gap-2 flex-shrink-0">
           <NButton
             type="primary"
@@ -318,88 +307,70 @@ const handleClear = () => {
           </NButton>
         </div>
 
-        <!-- 上传区域 -->
-        <NUpload
-          :show-file-list="false"
-          :custom-request="handleFileUpload"
-          accept=".xlsx,.xls,.csv"
-          class="flex-shrink-0"
-        >
-          <div
-            class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
-            :class="isDark ? 'border-gray-600 hover:border-blue-500 bg-gray-700' : 'border-gray-300 hover:border-blue-500 bg-gray-50'"
-          >
-            <NIcon :size="32" class="mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-              <CloudUploadOutline />
-            </NIcon>
-            <div v-if="fileName" class="text-blue-400">{{ fileName }}</div>
-            <div v-else :class="isDark ? 'text-gray-400' : 'text-gray-500'">点击或拖拽Excel文件到此处</div>
-            <div class="text-xs mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">支持 .xlsx / .xls / .csv</div>
-          </div>
-        </NUpload>
-
-        <!-- 原始数据预览 -->
-        <div v-if="fileData.length > 0" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between items-center">
-            <span>原始数据预览</span>
-            <NTag size="small" type="info">{{ fileData.length }} 行</NTag>
-          </div>
-          <div class="flex-1 border rounded-lg overflow-hidden" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
-            <NScrollbar class="h-full">
-              <NDataTable
-                :columns="originalTableColumns"
-                :data="originalTableData.slice(0, 100)"
-                :bordered="false"
-                size="small"
-                :max-height="300"
-                virtual-scroll
-              />
-            </NScrollbar>
-          </div>
+        <div v-if="fileName" class="flex items-center gap-2 flex-shrink-0">
+          <NTag size="small" type="info">{{ fileName }}</NTag>
+          <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">共 {{ fileData.length }} 行</span>
         </div>
       </div>
     </template>
 
     <template #output>
-      <div class="h-full flex flex-col">
-        <ActionBar
-          :showCopy="false"
-          :showDownload="true"
-          :showClear="true"
-          :downloadDisabled="processedData.length === 0 || processedData.length === fileData.length && processOptions.length === 0"
-          @download="handleDownload"
-          @clear="processedData = []"
-        />
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Excel数据预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+            <NButton
+              size="small"
+              :type="previewMode === 'original' ? 'primary' : 'default'"
+              @click="previewMode = 'original'"
+            >
+              原始数据
+            </NButton>
+            <NButton
+              size="small"
+              :type="previewMode === 'processed' ? 'primary' : 'default'"
+              @click="previewMode = 'processed'"
+              :disabled="processedData.length === 0"
+            >
+              处理结果
+            </NButton>
+            <div class="flex-1"></div>
+            <NTag v-if="fileData.length > 0" size="small" type="info">
+              {{ (previewMode === 'processed' ? processedData.length : fileData.length) || 0 }} 行
+            </NTag>
+            <NButton
+              v-if="fileData.length > 0"
+              size="small"
+              @click="handleDownload"
+            >
+              <template #icon>
+                <NIcon><DownloadOutline /></NIcon>
+              </template>
+              导出
+            </NButton>
+          </div>
 
-        <div v-if="processedData.length > 0" class="mt-4 flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between items-center">
-            <span>处理结果预览</span>
-            <div class="flex gap-2">
-              <NTag size="small" type="success">{{ processedData.length }} 行</NTag>
+          <div class="flex-1 min-h-0">
+            <ExcelPreview
+              v-if="previewData"
+              :data="previewData"
+              class="h-full"
+            />
+            <div v-else class="h-full flex items-center justify-center"
+                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+              <div class="text-center text-sm">上传Excel文件后可在此预览</div>
             </div>
           </div>
-          <div class="flex-1 border rounded-lg overflow-hidden" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
-            <NScrollbar class="h-full">
-              <NDataTable
-                :columns="processedTableColumns"
-                :data="tableData.slice(0, 500)"
-                :bordered="false"
-                size="small"
-                :max-height="400"
-                virtual-scroll
-              />
-            </NScrollbar>
-          </div>
         </div>
-        <div v-else class="mt-4 flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
-          <div class="text-center">
-            <NIcon :size="48" class="mb-2 opacity-50">
-              <DownloadOutline />
-            </NIcon>
-            <div>处理后的数据将显示在这里</div>
-          </div>
-        </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>
+
+<style scoped>
+</style>

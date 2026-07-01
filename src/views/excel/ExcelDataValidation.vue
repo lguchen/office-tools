@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { NButton, NIcon, NUpload, NRadioGroup, NRadio, NInput, NInputNumber, NSpace, NTag, NDataTable, NScrollbar, NSelect } from 'naive-ui'
+import { ref, computed, watch } from 'vue'
+import { NButton, NIcon, NRadioGroup, NRadio, NInput, NInputNumber, NSpace, NTag, NSelect } from 'naive-ui'
 import { CloudUploadOutline, DownloadOutline, CheckmarkCircleOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import ExcelPreview from '../../components/common/ExcelPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useNotification } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
@@ -16,6 +19,9 @@ const isDark = computed(() => settingsStore.theme === 'dark')
 // 文件数据
 const fileName = ref('')
 const workbook = ref<XLSX.WorkBook | null>(null)
+const fileArrayBuffer = ref<ArrayBuffer | null>(null)
+const isDetached = ref(false)
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
 
 // 数据验证类型
 type ValidationType = 'integer' | 'decimal' | 'textLength' | 'list'
@@ -44,15 +50,16 @@ const validationOptions = [
 ]
 
 // 文件上传处理
-const handleFileUpload = async (options: any) => {
-  const file = options.file.file as File
+const handleFileUpload = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  const fileInfo = files[0]
+  const file = fileInfo?.file
   if (!file) return
 
-  const validExtensions = ['.xlsx', '.xls']
+  const validExtensions = ['.xlsx', '.xls', '.csv']
   const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
 
   if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx 或 .xls 文件' })
+    notification.error({ title: '文件格式错误', content: '请上传 .xlsx、.xls 或 .csv 文件' })
     return
   }
 
@@ -60,6 +67,7 @@ const handleFileUpload = async (options: any) => {
 
   try {
     const arrayBuffer = await file.arrayBuffer()
+    fileArrayBuffer.value = arrayBuffer
     const wb = XLSX.read(arrayBuffer, { type: 'array' })
     workbook.value = wb
 
@@ -177,6 +185,7 @@ const buildValidationConfig = () => {
 const handleClear = () => {
   fileName.value = ''
   workbook.value = null
+  fileArrayBuffer.value = null
   minValue.value = 0
   maxValue.value = 100
   minLength.value = 0
@@ -309,24 +318,13 @@ const validationDescription = computed(() => {
         </div>
 
         <!-- 上传区域 -->
-        <NUpload
+        <FileDropZone
+          accept=".xlsx,.xls,.csv"
+          :multiple="false"
           :show-file-list="false"
-          :custom-request="handleFileUpload"
-          accept=".xlsx,.xls"
           class="flex-shrink-0"
-        >
-          <div
-            class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
-            :class="isDark ? 'border-gray-600 hover:border-blue-500 bg-gray-700' : 'border-gray-300 hover:border-blue-500 bg-gray-50'"
-          >
-            <NIcon :size="32" class="mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-              <CloudUploadOutline />
-            </NIcon>
-            <div v-if="fileName" class="text-blue-400">{{ fileName }}</div>
-            <div v-else :class="isDark ? 'text-gray-400' : 'text-gray-500'">点击上传Excel文件</div>
-            <div class="text-xs mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">支持 .xlsx / .xls</div>
-          </div>
-        </NUpload>
+          @files-selected="handleFileUpload"
+        />
 
         <!-- 操作按钮 -->
         <div class="mt-4 flex gap-2 flex-shrink-0">
@@ -348,84 +346,48 @@ const validationDescription = computed(() => {
     </template>
 
     <template #output>
-      <div class="h-full flex flex-col">
-        <!-- 验证配置预览 -->
-        <div v-if="selectedValidation" class="flex-1">
-          <div class="text-sm font-medium mb-3" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
-            当前配置预览
-          </div>
-
-          <!-- 配置卡片 -->
-          <div
-            class="p-4 rounded-lg space-y-3"
-            :class="isDark ? 'bg-gray-700' : 'bg-gray-50'"
-          >
-            <!-- 验证类型 -->
-            <div class="flex items-center gap-2">
-              <NIcon :class="isDark ? 'text-blue-400' : 'text-blue-500'">
-                <CheckmarkCircleOutline />
-              </NIcon>
-              <span class="font-medium" :class="isDark ? 'text-gray-200' : 'text-gray-700'">
-                {{ validationOptions.find(o => o.value === selectedValidation)?.label }}
-              </span>
-            </div>
-
-            <!-- 验证说明 -->
-            <div
-              class="text-sm"
-              :class="isDark ? 'text-gray-400' : 'text-gray-600'"
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Excel数据预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+            <NTag v-if="fileName" size="small" type="info">{{ fileName }}</NTag>
+            <div class="flex-1"></div>
+            <NButton
+              v-if="workbook"
+              size="small"
+              @click="handleExport"
             >
-              {{ validationDescription }}
-            </div>
-
-            <!-- 目标范围 -->
-            <div class="flex items-center gap-2">
-              <NTag size="small" type="info">目标范围</NTag>
-              <span :class="isDark ? 'text-gray-300' : 'text-gray-600'">{{ targetRange }}</span>
-            </div>
-
-            <!-- 错误提示 -->
-            <div class="mt-2 p-2 rounded" :class="isDark ? 'bg-red-900/30' : 'bg-red-50'">
-              <div class="text-xs font-medium text-red-400">{{ errorTitle }}</div>
-              <div class="text-xs text-red-300">{{ errorMessage }}</div>
-            </div>
+              <template #icon>
+                <NIcon><DownloadOutline /></NIcon>
+              </template>
+              导出
+            </NButton>
           </div>
 
-          <!-- 使用说明 -->
-          <div class="mt-4">
-            <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
-              使用说明
-            </div>
-            <div class="space-y-2 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-              <p>1. 选择要应用的数据验证类型</p>
-              <p>2. 设置验证规则的参数（范围值或下拉选项）</p>
-              <p>3. 配置输入无效数据时的错误提示消息</p>
-              <p>4. 指定要应用验证的单元格范围</p>
-              <p>5. 上传Excel文件并导出</p>
-            </div>
-          </div>
-
-          <!-- 注意事项 -->
-          <div class="mt-4 p-3 rounded-lg" :class="isDark ? 'bg-yellow-900/20 text-yellow-400' : 'bg-yellow-50 text-yellow-600'">
-            <div class="text-xs font-medium mb-1">注意事项</div>
-            <div class="text-xs">
-              数据验证功能导出需要xlsx-js-style库或ExcelJS库支持。
-              当前使用标准xlsx库，验证规则可能无法在Excel中直接生效。
-              建议安装xlsx-js-style库以获得完整的样式和数据验证支持。
+          <div class="flex-1 min-h-0">
+            <ExcelPreview
+              v-if="fileArrayBuffer"
+              :array-buffer="fileArrayBuffer"
+              class="h-full"
+            />
+            <div v-else class="h-full flex items-center justify-center"
+                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+              <div class="text-center text-sm">
+                <NIcon :size="48" class="mb-2 opacity-50">
+                  <CheckmarkCircleOutline />
+                </NIcon>
+                <div>上传Excel文件后可在此预览数据</div>
+                <div class="text-xs mt-1 opacity-70">支持 .xlsx / .xls / .csv 格式</div>
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- 空状态 -->
-        <div v-else class="flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
-          <div class="text-center">
-            <NIcon :size="48" class="mb-2 opacity-50">
-              <CheckmarkCircleOutline />
-            </NIcon>
-            <div>选择数据验证类型后查看配置详情</div>
-          </div>
-        </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>

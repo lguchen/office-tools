@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NButton, NIcon, NUpload, NRadioGroup, NRadio, NInputNumber, NSpace, NTag, NDataTable, NScrollbar, NProgress } from 'naive-ui'
+import { NButton, NIcon, NRadioGroup, NRadio, NInputNumber, NSpace, NTag, NDataTable, NScrollbar, NProgress, NSelect } from 'naive-ui'
 import { CutOutline, GitMergeOutline, CloudUploadOutline, DownloadOutline, TrashOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import ExcelPreview from '../../components/common/ExcelPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useNotification } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs'
@@ -35,6 +38,21 @@ const progressText = ref('')
 
 // 输出结果
 const outputFiles = ref<{ name: string; sheets: string[]; rowCount: number }[]>([])
+const previewWorkbooks = ref<{ name: string; workbook: XLSX.WorkBook }[]>([])
+const currentPreviewIndex = ref(0)
+const isDetached = ref(false)
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
+
+const currentPreviewWorkbook = computed(() => {
+  if (previewWorkbooks.value.length === 0) return null
+  return previewWorkbooks.value[currentPreviewIndex.value]?.workbook || null
+})
+
+const currentPreviewArrayBuffer = computed(() => {
+  if (!currentPreviewWorkbook.value) return null
+  const wbout = XLSX.write(currentPreviewWorkbook.value, { bookType: 'xlsx', type: 'array' })
+  return wbout as ArrayBuffer
+})
 
 // 表格列定义（用于显示输出结果）
 const outputColumns = [
@@ -44,15 +62,16 @@ const outputColumns = [
 ]
 
 // 上传Excel文件（拆分模式）
-const handleSplitUpload = async (options: any) => {
-  const file = options.file.file as File
+const handleSplitUpload = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  const fileInfo = files[0]
+  const file = fileInfo?.file
   if (!file) return
 
-  const validExtensions = ['.xlsx', '.xls']
+  const validExtensions = ['.xlsx', '.xls', '.csv']
   const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
 
   if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx 或 .xls 文件' })
+    notification.error({ title: '文件格式错误', content: '请上传 .xlsx、.xls 或 .csv 文件' })
     return
   }
 
@@ -74,38 +93,41 @@ const handleSplitUpload = async (options: any) => {
 }
 
 // 上传Excel文件（合并模式）
-const handleMergeUpload = async (options: any) => {
-  const file = options.file.file as File
-  if (!file) return
+const handleMergeUpload = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  const validExtensions = ['.xlsx', '.xls', '.csv']
 
-  const validExtensions = ['.xlsx', '.xls']
-  const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  for (const fileInfo of files) {
+    const file = fileInfo.file
+    if (!file) continue
 
-  if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx 或 .xls 文件' })
-    return
-  }
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
 
-  // 检查是否已存在同名文件
-  if (mergeFiles.value.some(f => f.name === file.name)) {
-    notification.warning({ title: '文件已存在', content: '该文件已添加' })
-    return
-  }
+    if (!validExtensions.includes(fileExt)) {
+      notification.error({ title: '文件格式错误', content: '请上传 .xlsx、.xls 或 .csv 文件' })
+      continue
+    }
 
-  try {
-    const arrayBuffer = await file.arrayBuffer()
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-    mergeFiles.value.push({
-      name: file.name,
-      workbook
-    })
+    // 检查是否已存在同名文件
+    if (mergeFiles.value.some(f => f.name === file.name)) {
+      notification.warning({ title: '文件已存在', content: `${file.name} 已添加` })
+      continue
+    }
 
-    notification.success({
-      title: '添加成功',
-      content: `已添加 ${file.name}`
-    })
-  } catch (e) {
-    notification.error({ title: '导入失败', content: (e as Error).message })
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+      mergeFiles.value.push({
+        name: file.name,
+        workbook
+      })
+
+      notification.success({
+        title: '添加成功',
+        content: `已添加 ${file.name}`
+      })
+    } catch (e) {
+      notification.error({ title: '导入失败', content: (e as Error).message })
+    }
   }
 }
 
@@ -119,6 +141,8 @@ const handleSplit = async () => {
   isProcessing.value = true
   progress.value = 0
   outputFiles.value = []
+  previewWorkbooks.value = []
+  currentPreviewIndex.value = 0
 
   try {
     const wb = splitWorkbook.value
@@ -156,6 +180,10 @@ const handleSplit = async () => {
             name: newFileName,
             sheets: [sheetName],
             rowCount: data.length
+          })
+          previewWorkbooks.value.push({
+            name: newFileName,
+            workbook: newWb
           })
         }
 
@@ -214,6 +242,10 @@ const handleSplit = async () => {
             sheets: ['Sheet1'],
             rowCount: chunkData.length
           })
+          previewWorkbooks.value.push({
+            name: newFileName,
+            workbook: newWb
+          })
         }
 
         progress.value = Math.round(((i + 1) / fileCount) * 100)
@@ -243,6 +275,9 @@ const handleMerge = async () => {
   isProcessing.value = true
   progress.value = 0
   progressText.value = '正在合并文件...'
+  outputFiles.value = []
+  previewWorkbooks.value = []
+  currentPreviewIndex.value = 0
 
   try {
     const mergedWb = XLSX.utils.book_new()
@@ -289,6 +324,10 @@ const handleMerge = async () => {
           sheets: ['合并数据'],
           rowCount: allData.length
         }]
+        previewWorkbooks.value = [{
+          name: 'merged_rows.xlsx',
+          workbook: mergedWb
+        }]
 
         notification.success({
           title: '合并完成',
@@ -328,6 +367,10 @@ const handleMerge = async () => {
           sheets: mergedWb.SheetNames,
           rowCount: mergedWb.SheetNames.length
         }]
+        previewWorkbooks.value = [{
+          name: 'merged_sheets.xlsx',
+          workbook: mergedWb
+        }]
 
         notification.success({
           title: '合并完成',
@@ -355,6 +398,8 @@ const handleClear = () => {
     mergeFiles.value = []
   }
   outputFiles.value = []
+  previewWorkbooks.value = []
+  currentPreviewIndex.value = 0
 }
 </script>
 
@@ -414,24 +459,13 @@ const handleClear = () => {
           </div>
 
           <!-- 上传区域 -->
-          <NUpload
+          <FileDropZone
+            accept=".xlsx,.xls,.csv"
+            :multiple="false"
             :show-file-list="false"
-            :custom-request="handleSplitUpload"
-            accept=".xlsx,.xls"
             class="flex-shrink-0"
-          >
-            <div
-              class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
-              :class="isDark ? 'border-gray-600 hover:border-blue-500 bg-gray-700' : 'border-gray-300 hover:border-blue-500 bg-gray-50'"
-            >
-              <NIcon :size="32" class="mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                <CloudUploadOutline />
-              </NIcon>
-              <div v-if="splitFileName" class="text-blue-400">{{ splitFileName }}</div>
-              <div v-else :class="isDark ? 'text-gray-400' : 'text-gray-500'">点击上传Excel文件</div>
-              <div class="text-xs mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">支持 .xlsx / .xls</div>
-            </div>
-          </NUpload>
+            @files-selected="handleSplitUpload"
+          />
 
           <!-- 文件信息 -->
           <div v-if="splitSheets.length > 0" class="mt-4 flex gap-2">
@@ -473,24 +507,13 @@ const handleClear = () => {
           </div>
 
           <!-- 上传区域 -->
-          <NUpload
-            :show-file-list="false"
-            :custom-request="handleMergeUpload"
-            accept=".xlsx,.xls"
+          <FileDropZone
+            accept=".xlsx,.xls,.csv"
             :multiple="true"
+            :show-file-list="false"
             class="flex-shrink-0"
-          >
-            <div
-              class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
-              :class="isDark ? 'border-gray-600 hover:border-blue-500 bg-gray-700' : 'border-gray-300 hover:border-blue-500 bg-gray-50'"
-            >
-              <NIcon :size="32" class="mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                <CloudUploadOutline />
-              </NIcon>
-              <div :class="isDark ? 'text-gray-400' : 'text-gray-500'">点击上传多个Excel文件</div>
-              <div class="text-xs mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">支持 .xlsx / .xls，可多次上传</div>
-            </div>
-          </NUpload>
+            @files-selected="handleMergeUpload"
+          />
 
           <!-- 已上传文件列表 -->
           <div v-if="mergeFiles.length > 0" class="mt-4 flex gap-2 flex-wrap">
@@ -521,50 +544,61 @@ const handleClear = () => {
     </template>
 
     <template #output>
-      <div class="h-full flex flex-col">
-        <!-- 进度条 -->
-        <div v-if="isProcessing" class="mb-4">
-          <NProgress
-            type="line"
-            :percentage="progress"
-            :height="24"
-            :border-radius="4"
-            :fill-border-radius="4"
-            status="default"
-          >
-            {{ progressText || `处理中 ${progress}%` }}
-          </NProgress>
-        </div>
-
-        <!-- 输出结果 -->
-        <div v-if="outputFiles.length > 0" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between items-center">
-            <span>输出文件</span>
-            <NTag size="small" type="success">{{ outputFiles.length }} 个文件</NTag>
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Excel预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div v-if="isProcessing" class="px-3 py-2 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+            <NProgress
+              type="line"
+              :percentage="progress"
+              :height="24"
+              :border-radius="4"
+              :fill-border-radius="4"
+              status="default"
+            >
+              {{ progressText || `处理中 ${progress}%` }}
+            </NProgress>
           </div>
-          <div class="flex-1 border rounded-lg overflow-hidden" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
-            <NScrollbar class="h-full">
-              <NDataTable
-                :columns="outputColumns"
-                :data="outputFiles"
-                :bordered="false"
+
+          <div v-if="previewWorkbooks.length > 0" class="flex-1 min-h-0 flex flex-col">
+            <div v-if="previewWorkbooks.length > 1" class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
+                 :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+              <span class="text-sm" :class="isDark ? 'text-gray-300' : 'text-gray-700'">文件：</span>
+              <NSelect
+                :value="currentPreviewIndex"
+                :options="previewWorkbooks.map((wb, idx) => ({ label: wb.name, value: idx }))"
                 size="small"
-                :max-height="300"
+                class="flex-1 max-w-xs"
+                @update:value="currentPreviewIndex = $event"
               />
-            </NScrollbar>
-          </div>
-        </div>
+              <NTag size="small" type="success">{{ previewWorkbooks.length }} 个文件</NTag>
+            </div>
 
-        <!-- 空状态 -->
-        <div v-else class="flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
-          <div class="text-center">
-            <NIcon :size="48" class="mb-2 opacity-50">
-              <DownloadOutline />
-            </NIcon>
-            <div>处理后的文件将显示在这里</div>
+            <div class="flex-1 min-h-0">
+              <ExcelPreview
+                v-if="currentPreviewArrayBuffer"
+                :array-buffer="currentPreviewArrayBuffer"
+                class="h-full"
+              />
+            </div>
+          </div>
+
+          <div v-else class="flex-1 flex items-center justify-center"
+               :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div class="text-center text-sm">
+              <NIcon :size="48" class="mb-2 opacity-50">
+                <DownloadOutline />
+              </NIcon>
+              <div>处理后的文件将显示在这里</div>
+            </div>
           </div>
         </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>

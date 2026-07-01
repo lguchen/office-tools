@@ -301,7 +301,7 @@ const getStatusText = (status: string) => {
 
 const loadPrinters = async () => {
   try {
-    const result = await invoke<string[]>('get_printers')
+    const result = await invoke<string[]>('get_cached_printers')
     printers.value = result
     if (result.length > 0 && !printerName.value) {
       printerName.value = result[0]
@@ -311,10 +311,23 @@ const loadPrinters = async () => {
   }
 }
 
+const refreshPrinters = async () => {
+  try {
+    const result = await invoke<string[]>('refresh_printers')
+    printers.value = result
+    if (result.length > 0 && !printerName.value) {
+      printerName.value = result[0]
+    }
+    notification.success({ title: '刷新成功', content: `已刷新 ${result.length} 台打印机` })
+  } catch (e) {
+    notification.error({ title: '刷新失败', content: (e as Error).message })
+  }
+}
+
 const scanNetworkPrinters = async () => {
   isScanningNetwork.value = true
   try {
-    const result = await invoke<any[]>('scan_network_printers')
+    const result = await invoke<any[]>('get_cached_network_printers')
     networkPrinters.value = result
   } catch (e) {
     notification.error({ title: '扫描失败', content: (e as Error).message })

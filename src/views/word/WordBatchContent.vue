@@ -9,9 +9,8 @@
   安装：npm install mammoth docx
 -->
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import {
-  NUpload,
   NButton,
   NInput,
   NInputGroup,
@@ -35,7 +34,6 @@ import {
   TextRun,
   HeadingLevel
 } from 'docx'
-import type { UploadFileInfo } from 'naive-ui'
 import {
   DocumentOutline,
   TrashOutline,
@@ -44,6 +42,9 @@ import {
   DownloadOutline
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import WordPreview from '../../components/common/WordPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
@@ -51,7 +52,7 @@ const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.theme === 'dark')
 
 // 上传的文件列表
-const fileList = ref<UploadFileInfo[]>([])
+const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
 // 处理模式：'replace' | 'delete'
 const processMode = ref<'replace' | 'delete'>('replace')
 // 查找替换规则列表
@@ -67,17 +68,114 @@ const processResults = ref<Array<{ name: string; status: 'success' | 'error' | '
 // 是否正在处理
 const isProcessing = ref(false)
 
-// 上传配置
-const uploadProps = {
-  accept: '.docx',
-  multiple: true,
-  showFileList: true,
-  max: 10
-}
+// 预览相关状态
+const currentFileIndex = ref(0)
+const originalBuffers = ref<Array<ArrayBuffer | null>>([])
+const processedBuffers = ref<Array<ArrayBuffer | null>>([])
+const realtimePreview = ref(true)
+const isDetached = ref(false)
+const previewMode = ref<'original' | 'processed'>('processed')
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
+let debounceTimer: number | null = null
+
+// 计算属性
+const currentFile = computed(() => fileList.value[currentFileIndex.value] || null)
+const currentOriginalBuffer = computed(() => originalBuffers.value[currentFileIndex.value] || null)
+const currentProcessedBuffer = computed(() => processedBuffers.value[currentFileIndex.value] || null)
+const displayBuffer = computed(() => {
+  if (previewMode.value === 'processed' && currentProcessedBuffer.value) {
+    return currentProcessedBuffer.value
+  }
+  return currentOriginalBuffer.value
+})
 
 // 处理文件上传
-const handleUploadChange = (options: { fileList: UploadFileInfo[] }) => {
-  fileList.value = options.fileList
+const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  fileList.value = files
+  currentFileIndex.value = 0
+
+  // 读取所有文件的 ArrayBuffer
+  const buffers: Array<ArrayBuffer | null> = []
+  for (const file of files) {
+    if (file.file) {
+      buffers.push(await file.file.arrayBuffer())
+    } else {
+      buffers.push(null)
+    }
+  }
+  originalBuffers.value = buffers
+  processedBuffers.value = new Array(files.length).fill(null)
+
+  if (realtimePreview.value && files.length > 0) {
+    debounceProcess()
+  }
+}
+
+// 防抖处理
+const debounceProcess = () => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = window.setTimeout(() => {
+    if (realtimePreview.value && currentOriginalBuffer.value) {
+      doProcessForIndex(currentFileIndex.value, false)
+    }
+  }, 300)
+}
+
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+})
+
+// 监听处理规则变化，触发实时预览
+watch([processMode, replaceRules, deleteRules], () => {
+  if (realtimePreview.value) {
+    debounceProcess()
+  }
+}, { deep: true })
+
+// 预览处理单个文件
+const doProcessForIndex = async (index: number, showNotification: boolean) => {
+  const originalBuffer = originalBuffers.value[index]
+  const file = fileList.value[index]
+  if (!originalBuffer || !file) return
+
+  try {
+    const mammoth = (await import('mammoth')).default
+
+    const textResult = await mammoth.extractRawText({ arrayBuffer: originalBuffer })
+    let text = textResult.value
+
+    text = processText(text)
+
+    const paragraphs = text.split('\n').map(line =>
+      new Paragraph({
+        children: [new TextRun({ text: line, size: 24 })]
+      })
+    )
+
+    const doc = new Document({
+      sections: [{ children: paragraphs }]
+    })
+
+    const blob = await Packer.toBlob(doc)
+    processedBuffers.value[index] = await blob.arrayBuffer()
+
+    await nextTick()
+    if (isDetached.value && detachableRef.value) {
+      detachableRef.value.syncContent()
+    }
+
+    if (showNotification) {
+      notification.success({
+        title: '处理完成',
+        content: `${file.name} 处理完成`
+      })
+    }
+  } catch (e) {
+    console.error('Process error:', e)
+    if (showNotification) {
+      notification.error({ title: '处理失败', content: (e as Error).message })
+    }
+  }
 }
 
 // 添加替换规则
@@ -157,46 +255,33 @@ const handleProcess = async () => {
   }
 
   isProcessing.value = true
-  processResults.value = validFiles.map(f => ({
+  processResults.value = fileList.value.map(f => ({
     name: f.name,
-    status: 'pending',
+    status: 'pending' as const,
     message: '处理中...'
   }))
 
   try {
-    // 模拟处理过程（实际项目中需要读取和解析docx文件）
-    for (let i = 0; i < validFiles.length; i++) {
-      const file = validFiles[i]
-
-      // 创建一个新的文档（演示用）
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({
-              text: `处理后的文档: ${file.name}`,
-              heading: HeadingLevel.HEADING_1
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: '本文档已进行批量内容处理。',
-                  size: 24
-                })
-              ]
-            })
-          ]
-        }]
-      })
-
-      // 生成blob
-      const blob = await Packer.toBlob(doc)
-
-      processResults.value[i] = {
-        name: file.name,
-        status: 'success',
-        message: '处理完成，可下载'
+    for (let i = 0; i < fileList.value.length; i++) {
+      if (fileList.value[i].file) {
+        await doProcessForIndex(i, false)
+        processResults.value[i] = {
+          name: fileList.value[i].name,
+          status: 'success',
+          message: '处理完成，可下载'
+        }
+      } else {
+        processResults.value[i] = {
+          name: fileList.value[i].name,
+          status: 'error',
+          message: '文件无效'
+        }
       }
+    }
+
+    await nextTick()
+    if (isDetached.value && detachableRef.value) {
+      detachableRef.value.syncContent()
     }
 
     notification.success({ title: '处理完成', content: '所有文件处理成功' })
@@ -215,30 +300,37 @@ const handleProcess = async () => {
 // 下载处理后的文档
 const handleDownload = async (index: number) => {
   const file = fileList.value[index]
+  const processedBuffer = processedBuffers.value[index]
   if (!file) return
 
-  // 创建演示文档
-  const doc = new Document({
-    sections: [{
-      properties: {},
-      children: [
-        new Paragraph({
-          text: `处理后的文档: ${file.name}`,
-          heading: HeadingLevel.HEADING_1
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: '本文档已进行批量内容处理。',
-              size: 24
-            })
-          ]
-        })
-      ]
-    }]
-  })
+  let blob: Blob
+  if (processedBuffer) {
+    blob = new Blob([processedBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    })
+  } else {
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({
+            text: `处理后的文档: ${file.name}`,
+            heading: HeadingLevel.HEADING_1
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: '本文档已进行批量内容处理。',
+                size: 24
+              })
+            ]
+          })
+        ]
+      }]
+    })
+    blob = await Packer.toBlob(doc)
+  }
 
-  const blob = await Packer.toBlob(doc)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -258,10 +350,21 @@ const handleDownloadAll = async () => {
   }
 }
 
+// 切换当前预览文件
+const selectFile = (index: number) => {
+  currentFileIndex.value = index
+  if (realtimePreview.value && !processedBuffers.value[index] && originalBuffers.value[index]) {
+    debounceProcess()
+  }
+}
+
 // 清空所有
 const handleClear = () => {
   fileList.value = []
   processResults.value = []
+  currentFileIndex.value = 0
+  originalBuffers.value = []
+  processedBuffers.value = []
   replaceRules.value = [{ find: '', replace: '', useWildcard: false }]
   deleteRules.value = [{ content: '', useWildcard: false }]
 }
@@ -276,21 +379,11 @@ const handleClear = () => {
           <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
             上传Word文档
           </div>
-          <NUpload
-            :file-list="fileList"
-            @update:file-list="handleUploadChange"
+          <FileDropZone
             accept=".docx"
-            multiple
-            :max="10"
-            directory-dnd
-          >
-            <NButton>
-              <template #icon>
-                <NIcon><DocumentOutline /></NIcon>
-              </template>
-              选择文件或拖拽上传
-            </NButton>
-          </NUpload>
+            :multiple="true"
+            @files-selected="handleFilesSelected"
+          />
           <div class="mt-1 text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
             支持 .docx 格式，最多10个文件
           </div>
@@ -435,54 +528,116 @@ const handleClear = () => {
     </template>
 
     <template #output>
-      <div class="space-y-4">
-        <NAlert v-if="fileList.length === 0" type="info">
-          请先上传Word文档，设置处理规则后开始处理
-        </NAlert>
-
-        <div v-else>
-          <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Word文档预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+            <NButton
+              size="small"
+              :type="previewMode === 'original' ? 'primary' : 'default'"
+              @click="previewMode = 'original'"
+            >
+              原始文档
+            </NButton>
+            <NButton
+              size="small"
+              :type="previewMode === 'processed' ? 'primary' : 'default'"
+              @click="previewMode = 'processed'"
+              :disabled="!currentProcessedBuffer"
+            >
               处理结果
+            </NButton>
+            <div class="flex-1"></div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+              <NSwitch v-model:value="realtimePreview" size="small" />
             </div>
             <NButton
-              v-if="processResults.some(r => r.status === 'success')"
+              v-if="currentProcessedBuffer"
               size="small"
-              @click="handleDownloadAll"
+              @click="handleDownload(currentFileIndex)"
             >
               <template #icon>
                 <NIcon><DownloadOutline /></NIcon>
               </template>
-              批量下载
+              下载
             </NButton>
           </div>
 
-          <NList bordered>
-            <NListItem v-for="(result, index) in processResults" :key="index">
-              <template #prefix>
-                <NIcon :class="result.status === 'success' ? 'text-green-500' : result.status === 'error' ? 'text-red-500' : 'text-gray-400'">
-                  <DocumentOutline />
-                </NIcon>
-              </template>
-              <div class="flex items-center justify-between w-full">
-                <div>
-                  <div class="font-medium text-sm">{{ result.name }}</div>
-                  <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                    {{ result.message }}
-                  </div>
-                </div>
+          <div class="flex-1 min-h-0 flex">
+            <div class="w-56 border-r flex-shrink-0 flex flex-col"
+                 :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+              <div class="px-3 py-2 border-b flex items-center justify-between"
+                   :class="isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'">
+                <span class="text-xs font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-600'">文件列表</span>
                 <NButton
-                  v-if="result.status === 'success'"
-                  size="small"
-                  @click="handleDownload(index)"
+                  v-if="processResults.some(r => r.status === 'success')"
+                  size="tiny"
+                  @click="handleDownloadAll"
                 >
-                  下载
+                  批量下载
                 </NButton>
               </div>
-            </NListItem>
-          </NList>
+              <div class="flex-1 overflow-auto">
+                <NList bordered class="!border-l-0 !border-r-0 !border-t-0">
+                  <NListItem
+                    v-for="(file, index) in fileList"
+                    :key="index"
+                    class="cursor-pointer transition-colors"
+                    :class="currentFileIndex === index ? (isDark ? 'bg-gray-700/50' : 'bg-blue-50') : ''"
+                    @click="selectFile(index)"
+                  >
+                    <template #prefix>
+                      <NIcon :class="processResults[index]?.status === 'success' ? 'text-green-500' : processResults[index]?.status === 'error' ? 'text-red-500' : 'text-gray-400'">
+                        <DocumentOutline />
+                      </NIcon>
+                    </template>
+                    <div class="flex items-center justify-between w-full min-w-0">
+                      <div class="truncate pr-2">
+                        <div class="font-medium text-xs truncate" :class="isDark ? 'text-gray-200' : 'text-gray-700'">{{ file.name }}</div>
+                        <div class="text-xs opacity-70">
+                          {{ processResults[index]?.message || '未处理' }}
+                        </div>
+                      </div>
+                      <NButton
+                        v-if="processResults[index]?.status === 'success'"
+                        size="tiny"
+                        @click.stop="handleDownload(index)"
+                      >
+                        下载
+                      </NButton>
+                    </div>
+                  </NListItem>
+                </NList>
+                <div v-if="fileList.length === 0" class="p-4 text-center text-xs"
+                     :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+                  请先上传Word文档
+                </div>
+              </div>
+            </div>
+
+            <div class="flex-1 min-h-0">
+              <WordPreview
+                v-if="displayBuffer"
+                :array-buffer="displayBuffer"
+                class="h-full"
+              />
+              <div v-else class="h-full flex items-center justify-center"
+                   :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+                <div class="text-center text-sm">
+                  <div>上传.docx文件后可在此预览</div>
+                  <div class="text-xs mt-1 opacity-70">选择左侧文件查看不同文档</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>

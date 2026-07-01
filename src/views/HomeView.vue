@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NIcon, NButton } from 'naive-ui'
 import {
@@ -10,13 +10,107 @@ import {
   CodeSlashOutline,
   CreateOutline,
   PrintOutline,
-  GridOutline
+  GridOutline,
+  CloudUploadOutline
 } from '@vicons/ionicons5'
 import { useSettingsStore } from '../stores/settings'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.theme === 'dark')
+
+const isDragging = ref(false)
+const unlistenDragEnter = ref<UnlistenFn | null>(null)
+const unlistenDragLeave = ref<UnlistenFn | null>(null)
+const unlistenDrop = ref<UnlistenFn | null>(null)
+let dragCount = 0
+
+const getRouteForFile = (path: string): string | null => {
+  const ext = path.split('.').pop()?.toLowerCase() || ''
+  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'svg', 'ico']
+  const wordExts = ['docx', 'doc']
+  const excelExts = ['xlsx', 'xls', 'csv']
+  const pdfExts = ['pdf']
+  const textExts = ['txt']
+  const jsonExts = ['json']
+
+  if (imageExts.includes(ext)) return '/image/convert'
+  if (wordExts.includes(ext)) return '/word/format'
+  if (excelExts.includes(ext)) return '/excel/process'
+  if (pdfExts.includes(ext)) return '/pdf/merge'
+  if (jsonExts.includes(ext)) return '/json/format'
+  if (textExts.includes(ext)) return '/text/replace'
+  return null
+}
+
+const handleFileDrop = async (paths: string[]) => {
+  if (paths.length === 0) return
+  const firstPath = paths[0]
+  const route = getRouteForFile(firstPath)
+  if (route) {
+    const fileName = firstPath.split(/[\\/]/).pop() || firstPath
+    try {
+      const { readBinaryFile } = await import('@tauri-apps/plugin-fs')
+      const data = await readBinaryFile(firstPath)
+      const ext = fileName.split('.').pop()?.toLowerCase() || ''
+      const mimeMap: Record<string, string> = {
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        pdf: 'application/pdf',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        bmp: 'image/bmp',
+        webp: 'image/webp',
+        txt: 'text/plain',
+        json: 'application/json'
+      }
+      const file = new File([data], fileName, { type: mimeMap[ext] || 'application/octet-stream' })
+      sessionStorage.setItem('drag-drop-file', JSON.stringify({
+        name: fileName,
+        path: firstPath,
+        size: data.byteLength
+      }))
+      sessionStorage.setItem('drag-drop-file-buffer', JSON.stringify(Array.from(new Uint8Array(data))))
+    } catch (e) {
+      console.warn('Failed to read dropped file:', e)
+    }
+    router.push(route)
+  }
+}
+
+onMounted(async () => {
+  try {
+    unlistenDragEnter.value = await listen('tauri://drag-enter', () => {
+      dragCount++
+      isDragging.value = true
+    })
+
+    unlistenDragLeave.value = await listen('tauri://drag-leave', () => {
+      dragCount = Math.max(0, dragCount - 1)
+      if (dragCount === 0) {
+        isDragging.value = false
+      }
+    })
+
+    unlistenDrop.value = await listen<{ paths: string[] }>('tauri://drag-drop', async (event) => {
+      dragCount = 0
+      isDragging.value = false
+      handleFileDrop(event.payload.paths)
+    })
+  } catch (e) {
+    console.log('Not in Tauri environment, home page drag-drop disabled')
+  }
+})
+
+onUnmounted(() => {
+  unlistenDragEnter.value?.()
+  unlistenDragLeave.value?.()
+  unlistenDrop.value?.()
+  dragCount = 0
+})
 
 interface ToolCategory {
   name: string
@@ -142,7 +236,24 @@ const navigateTo = (path: string) => {
 </script>
 
 <template>
-  <div class="home-view p-6">
+  <div class="home-view p-6 relative">
+    <div v-if="isDragging" 
+         class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+         :class="isDark ? 'bg-blue-500/10' : 'bg-blue-500/5'">
+      <div class="px-12 py-10 rounded-2xl border-2 border-dashed text-center"
+           :class="isDark ? 'border-blue-400 bg-gray-900/90' : 'border-blue-400 bg-white/90'">
+        <NIcon size="64" class="text-blue-500 mb-4">
+          <CloudUploadOutline />
+        </NIcon>
+        <div class="text-xl font-medium mb-2" :class="isDark ? 'text-gray-200' : 'text-gray-700'">
+          松开鼠标上传文件
+        </div>
+        <div class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+          系统将自动识别文件类型并跳转到对应工具
+        </div>
+      </div>
+    </div>
+
     <div class="mb-8">
       <h1 class="text-3xl font-bold mb-2" :class="isDark ? 'text-blue-400' : 'text-blue-600'">欢迎使用轻量化办公文档工具箱</h1>
       <p :class="isDark ? 'text-gray-400' : 'text-gray-500'">完全离线、秒开即用，聚焦办公文档场景的高效工具集</p>
@@ -156,7 +267,7 @@ const navigateTo = (path: string) => {
                 <NIcon :size="24" :class="category.color">
                   <component :is="category.icon" />
                 </NIcon>
-                <span class="font-bold">{{ category.name }}</span>
+                <span class="font-bold" :class="isDark ? 'text-gray-200' : 'text-gray-800'">{{ category.name }}</span>
               </div>
             </template>
             <div class="space-y-1">
@@ -168,7 +279,7 @@ const navigateTo = (path: string) => {
                 @click="navigateTo(tool.path)"
               >
                 <div>
-                  <div class="font-medium text-sm">{{ tool.name }}</div>
+                  <div class="font-medium text-sm" :class="isDark ? 'text-gray-300' : 'text-gray-700'">{{ tool.name }}</div>
                   <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ tool.desc }}</div>
                 </div>
                 <NButton size="tiny" quaternary>

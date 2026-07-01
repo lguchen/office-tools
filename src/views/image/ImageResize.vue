@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { NInputNumber, NButton, NIcon, NUpload, NUploadDragger, NFormItem, NForm, NSwitch, NTag } from 'naive-ui'
+import { NInputNumber, NButton, NIcon, NFormItem, NForm, NSwitch, NTag } from 'naive-ui'
 import { CropOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import ImagePreview from '../../components/common/ImagePreview.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
+import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
+const settingsStore = useSettingsStore()
+const isDark = computed(() => settingsStore.theme === 'dark')
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -28,8 +32,9 @@ const percent = ref(100)
 
 const canResize = computed(() => inputFile.value !== null && width.value > 0 && height.value > 0)
 
-const handleFileUpload = (options: any) => {
-  const file = options.file.file as File
+const handleFileUpload = (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  const file = files[0]?.file
+  if (!file) return
   inputFile.value = file
   fileName.value = file.name
   outputBlobUrl.value = ''
@@ -190,14 +195,14 @@ const applyPreset = (preset: any) => {
                 style="width: 100px;"
                 @update:value="onWidthChange"
               />
-              <span class="text-gray-500">×</span>
+              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">×</span>
               <NInputNumber
                 v-model:value="height"
                 placeholder="高度"
                 style="width: 100px;"
                 @update:value="onHeightChange"
               />
-              <span class="text-gray-500 text-sm">px</span>
+              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">px</span>
             </div>
           </NFormItem>
 
@@ -209,7 +214,7 @@ const applyPreset = (preset: any) => {
                 :max="500"
                 style="width: 100px;"
               />
-              <span class="text-gray-500">%</span>
+              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">%</span>
             </div>
           </NFormItem>
 
@@ -231,7 +236,7 @@ const applyPreset = (preset: any) => {
           </NFormItem>
         </NForm>
 
-        <div v-if="originalWidth > 0" class="text-xs text-gray-500">
+        <div v-if="originalWidth > 0" class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
           原始尺寸: {{ originalWidth }} × {{ originalHeight }} px
         </div>
 
@@ -245,22 +250,14 @@ const applyPreset = (preset: any) => {
           <NButton @click="handleClear">清空</NButton>
         </div>
 
-        <NUpload
-          :show-file-list="false"
-          :custom-request="handleFileUpload"
-          accept="image/*"
-        >
-          <NUploadDragger>
-            <div class="py-4">
-              <div class="text-2xl mb-1">🖼️</div>
-              <div v-if="fileName" class="text-blue-400 text-sm">{{ fileName }}</div>
-              <div v-else class="text-gray-400 text-sm">点击或拖拽图片</div>
-            </div>
-          </NUploadDragger>
-        </NUpload>
+        <FileDropZone
+          accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff"
+          :multiple="false"
+          @files-selected="handleFileUpload"
+        />
 
         <div v-if="inputImageUrl" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2">原图预览</div>
+          <div class="text-sm mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">原图预览</div>
           <div class="flex-1 flex items-center justify-center">
             <ImagePreview :src="inputImageUrl" />
           </div>
@@ -279,7 +276,7 @@ const applyPreset = (preset: any) => {
           @clear="outputBlobUrl = ''"
         />
         <div v-if="outputBlobUrl" class="mt-4 flex-1 min-h-0 flex flex-col">
-          <div class="text-sm text-gray-400 mb-2 flex justify-between">
+          <div class="text-sm mb-2 flex justify-between" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
             <span>输出结果</span>
             <NTag size="small" type="success">{{ formatFileSize(outputSize) }}</NTag>
           </div>
@@ -287,7 +284,7 @@ const applyPreset = (preset: any) => {
             <ImagePreview :src="outputBlobUrl" />
           </div>
         </div>
-        <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">
+        <div v-else class="mt-4 flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
           调整结果将显示在这里
         </div>
       </div>

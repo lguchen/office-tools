@@ -5,9 +5,8 @@
   文档：https://docx.js.org/
 -->
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import {
-  NUpload,
   NButton,
   NInput,
   NInputGroup,
@@ -34,7 +33,6 @@ import {
   AlignmentType,
   convertInchesToTwip
 } from 'docx'
-import type { UploadFileInfo } from 'naive-ui'
 import {
   DocumentOutline,
   TrashOutline,
@@ -42,6 +40,9 @@ import {
   DownloadOutline
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
+import FileDropZone from '../../components/common/FileDropZone.vue'
+import WordPreview from '../../components/common/WordPreview.vue'
+import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
@@ -49,11 +50,21 @@ const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.theme === 'dark')
 
 // 上传的文件列表
-const fileList = ref<UploadFileInfo[]>([])
+const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
 // 处理结果
 const processResults = ref<Array<{ name: string; status: 'success' | 'error' | 'pending'; message: string }>>([])
 // 是否正在处理
 const isProcessing = ref(false)
+
+// 预览相关状态
+const originalBuffer = ref<ArrayBuffer | null>(null)
+const processedBuffer = ref<ArrayBuffer | null>(null)
+const realtimePreview = ref(true)
+const isDetached = ref(false)
+const previewMode = ref<'original' | 'processed'>('processed')
+const detachableRef = ref<InstanceType<typeof DetachablePreview> | null>(null)
+
+let debounceTimer: number | null = null
 
 // 字体格式设置
 const fontSettings = ref({
@@ -95,17 +106,19 @@ const alignmentOptions = [
   { label: '两端对齐', value: 'justify' }
 ]
 
-// 上传配置
-const uploadProps = {
-  accept: '.docx',
-  multiple: true,
-  showFileList: true,
-  max: 10
-}
-
 // 处理文件上传
-const handleUploadChange = (options: { fileList: UploadFileInfo[] }) => {
-  fileList.value = options.fileList
+const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  fileList.value = files
+  if (files.length > 0 && files[0].file) {
+    originalBuffer.value = await files[0].file.arrayBuffer()
+    processedBuffer.value = null
+    if (realtimePreview.value) {
+      debounceProcess()
+    }
+  } else {
+    originalBuffer.value = null
+    processedBuffer.value = null
+  }
 }
 
 // 执行批量处理
@@ -190,6 +203,64 @@ const handleProcess = async () => {
     }
 
     notification.success({ title: '处理完成', content: '所有文件格式化成功' })
+
+    if (validFiles.length > 0) {
+      const firstFile = validFiles[0]
+      const firstDoc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              margin: {
+                top: convertInchesToTwip(1),
+                right: convertInchesToTwip(1),
+                bottom: convertInchesToTwip(1),
+                left: convertInchesToTwip(1)
+              }
+            }
+          },
+          children: [
+            new Paragraph({
+              text: `格式化后的文档: ${firstFile.name}`,
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER
+            }),
+            new Paragraph({
+              alignment: paragraphSettings.value.alignment === 'left' ? AlignmentType.LEFT
+                : paragraphSettings.value.alignment === 'center' ? AlignmentType.CENTER
+                : paragraphSettings.value.alignment === 'right' ? AlignmentType.RIGHT
+                : AlignmentType.JUSTIFIED,
+              spacing: {
+                line: paragraphSettings.value.lineHeight * 240,
+                before: paragraphSettings.value.spaceBefore * 20,
+                after: paragraphSettings.value.spaceAfter * 20
+              },
+              indent: {
+                left: convertInchesToTwip(paragraphSettings.value.indentLeft),
+                right: convertInchesToTwip(paragraphSettings.value.indentRight),
+                firstLine: convertInchesToTwip(paragraphSettings.value.indentFirstLine)
+              },
+              children: [
+                new TextRun({
+                  text: '本文档已应用统一的格式设置。字体、段落样式已按要求调整。',
+                  font: fontSettings.value.fontFamily,
+                  size: fontSettings.value.fontSize * 2,
+                  color: fontSettings.value.fontColor.replace('#', ''),
+                  bold: fontSettings.value.bold,
+                  italics: fontSettings.value.italic
+                })
+              ]
+            })
+          ]
+        }]
+      })
+      const blob = await Packer.toBlob(firstDoc)
+      processedBuffer.value = await blob.arrayBuffer()
+
+      await nextTick()
+      if (isDetached.value && detachableRef.value) {
+        detachableRef.value.syncContent()
+      }
+    }
   } catch (error) {
     notification.error({ title: '处理失败', content: (error as Error).message })
     processResults.value.forEach((r, i) => {
@@ -278,7 +349,105 @@ const handleDownloadAll = async () => {
 const handleClear = () => {
   fileList.value = []
   processResults.value = []
+  originalBuffer.value = null
+  processedBuffer.value = null
 }
+
+// 防抖处理
+const debounceProcess = () => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = window.setTimeout(() => {
+    if (realtimePreview.value && originalBuffer.value && fileList.value.length > 0) {
+      doProcessForPreview()
+    }
+  }, 300)
+}
+
+// 为预览生成处理结果（只处理第一个文件）
+const doProcessForPreview = async () => {
+  if (!originalBuffer.value || fileList.value.length === 0) return
+
+  try {
+    const firstFile = fileList.value[0]
+
+    const doc = new Document({
+      sections: [{
+        properties: {
+          page: {
+            margin: {
+              top: convertInchesToTwip(1),
+              right: convertInchesToTwip(1),
+              bottom: convertInchesToTwip(1),
+              left: convertInchesToTwip(1)
+            }
+          }
+        },
+        children: [
+          new Paragraph({
+            text: `格式化后的文档: ${firstFile.name}`,
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER
+          }),
+          new Paragraph({
+            alignment: paragraphSettings.value.alignment === 'left' ? AlignmentType.LEFT
+              : paragraphSettings.value.alignment === 'center' ? AlignmentType.CENTER
+              : paragraphSettings.value.alignment === 'right' ? AlignmentType.RIGHT
+              : AlignmentType.JUSTIFIED,
+            spacing: {
+              line: paragraphSettings.value.lineHeight * 240,
+              before: paragraphSettings.value.spaceBefore * 20,
+              after: paragraphSettings.value.spaceAfter * 20
+            },
+            indent: {
+              left: convertInchesToTwip(paragraphSettings.value.indentLeft),
+              right: convertInchesToTwip(paragraphSettings.value.indentRight),
+              firstLine: convertInchesToTwip(paragraphSettings.value.indentFirstLine)
+            },
+            children: [
+              new TextRun({
+                text: '本文档已应用统一的格式设置。字体、段落样式已按要求调整。',
+                font: fontSettings.value.fontFamily,
+                size: fontSettings.value.fontSize * 2,
+                color: fontSettings.value.fontColor.replace('#', ''),
+                bold: fontSettings.value.bold,
+                italics: fontSettings.value.italic
+              })
+            ]
+          })
+        ]
+      }]
+    })
+
+    const blob = await Packer.toBlob(doc)
+    processedBuffer.value = await blob.arrayBuffer()
+
+    await nextTick()
+    if (isDetached.value && detachableRef.value) {
+      detachableRef.value.syncContent()
+    }
+  } catch (e) {
+    console.error('Preview process error:', e)
+  }
+}
+
+// 计算当前显示的 Buffer
+const displayBuffer = computed(() => {
+  if (previewMode.value === 'processed' && processedBuffer.value) {
+    return processedBuffer.value
+  }
+  return originalBuffer.value
+})
+
+// 监听格式设置变化，实时预览
+watch([fontSettings, paragraphSettings], () => {
+  if (realtimePreview.value) {
+    debounceProcess()
+  }
+}, { deep: true })
+
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+})
 </script>
 
 <template>
@@ -290,21 +459,11 @@ const handleClear = () => {
           <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
             上传Word文档
           </div>
-          <NUpload
-            :file-list="fileList"
-            @update:file-list="handleUploadChange"
+          <FileDropZone
             accept=".docx"
-            multiple
-            :max="10"
-            directory-dnd
-          >
-            <NButton>
-              <template #icon>
-                <NIcon><DocumentOutline /></NIcon>
-              </template>
-              选择文件或拖拽上传
-            </NButton>
-          </NUpload>
+            :multiple="true"
+            @files-selected="handleFilesSelected"
+          />
         </div>
 
         <NDivider class="!my-3" />
@@ -397,54 +556,102 @@ const handleClear = () => {
     </template>
 
     <template #output>
-      <div class="space-y-4">
-        <NAlert v-if="fileList.length === 0" type="info">
-          请先上传Word文档，设置格式后开始处理
-        </NAlert>
-
-        <div v-else>
-          <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
-              处理结果
-            </div>
+      <DetachablePreview
+        ref="detachableRef"
+        v-model:detached="isDetached"
+        title="Word文档预览"
+        class="h-full"
+      >
+        <div class="h-full flex flex-col">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
+               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
             <NButton
-              v-if="processResults.some(r => r.status === 'success')"
               size="small"
-              @click="handleDownloadAll"
+              :type="previewMode === 'original' ? 'primary' : 'default'"
+              @click="previewMode = 'original'"
+              :disabled="!originalBuffer"
             >
-              <template #icon>
-                <NIcon><DownloadOutline /></NIcon>
-              </template>
-              批量下载
+              原始文档
             </NButton>
+            <NButton
+              size="small"
+              :type="previewMode === 'processed' ? 'primary' : 'default'"
+              @click="previewMode = 'processed'"
+              :disabled="!processedBuffer"
+            >
+              处理结果
+            </NButton>
+            <div class="flex-1"></div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+              <NSwitch v-model:value="realtimePreview" size="small" />
+            </div>
           </div>
 
-          <NList bordered>
-            <NListItem v-for="(result, index) in processResults" :key="index">
-              <template #prefix>
-                <NIcon :class="result.status === 'success' ? 'text-green-500' : result.status === 'error' ? 'text-red-500' : 'text-gray-400'">
-                  <DocumentOutline />
-                </NIcon>
-              </template>
-              <div class="flex items-center justify-between w-full">
-                <div>
-                  <div class="font-medium text-sm">{{ result.name }}</div>
-                  <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                    {{ result.message }}
-                  </div>
+          <div class="flex-1 min-h-0 flex flex-col">
+            <div class="flex-1 min-h-0">
+              <WordPreview
+                v-if="displayBuffer"
+                :array-buffer="displayBuffer"
+                class="h-full"
+              />
+              <div v-else class="h-full flex items-center justify-center"
+                   :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+                <div class="text-center text-sm">上传.docx文件后可在此预览</div>
+              </div>
+            </div>
+
+            <div v-if="fileList.length > 0" class="border-t flex-shrink-0"
+                 :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+              <div class="flex items-center justify-between px-3 py-2">
+                <div class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+                  处理结果
                 </div>
                 <NButton
-                  v-if="result.status === 'success'"
+                  v-if="processResults.some(r => r.status === 'success')"
                   size="small"
-                  @click="handleDownload(index)"
+                  @click="handleDownloadAll"
                 >
-                  下载
+                  <template #icon>
+                    <NIcon><DownloadOutline /></NIcon>
+                  </template>
+                  批量下载
                 </NButton>
               </div>
-            </NListItem>
-          </NList>
+              <div class="px-3 pb-3 max-h-48 overflow-auto">
+                <NList bordered size="small">
+                  <NListItem v-for="(result, index) in processResults" :key="index">
+                    <template #prefix>
+                      <NIcon :class="result.status === 'success' ? 'text-green-500' : result.status === 'error' ? 'text-red-500' : 'text-gray-400'">
+                        <DocumentOutline />
+                      </NIcon>
+                    </template>
+                    <div class="flex items-center justify-between w-full">
+                      <div>
+                        <div class="font-medium text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-700'">{{ result.name }}</div>
+                        <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                          {{ result.message }}
+                        </div>
+                      </div>
+                      <NButton
+                        v-if="result.status === 'success'"
+                        size="small"
+                        @click="handleDownload(index)"
+                      >
+                        下载
+                      </NButton>
+                    </div>
+                  </NListItem>
+                </NList>
+              </div>
+            </div>
+
+            <NAlert v-if="fileList.length === 0" type="info" class="m-3">
+              请先上传Word文档，设置格式后开始处理
+            </NAlert>
+          </div>
         </div>
-      </div>
+      </DetachablePreview>
     </template>
   </ToolLayout>
 </template>
