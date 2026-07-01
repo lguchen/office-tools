@@ -53,6 +53,8 @@ const newPrinterPath = ref('')
 const isAddingPrinter = ref(false)
 const isDragOver = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const printPreviewRef = ref<InstanceType<typeof PrintPreview> | null>(null)
+const currentSelection = ref<any>(null)
 
 const copies = ref(1)
 const printOrder = ref<'sequential' | 'collated'>('collated')
@@ -133,7 +135,7 @@ const printSidesOptions = [
 
 const canPrint = computed(() => {
   if (printRange.value === 'selection') {
-    return selectedCount.value > 0
+    return !!currentSelection.value
   }
   return files.value.length > 0
 })
@@ -234,9 +236,14 @@ const loadFilesFromPaths = async (paths: string[]) => {
   }
 }
 
+const handleSelectionChange = (data: any) => {
+  currentSelection.value = data
+}
+
 const selectFile = (id: string) => {
   activeFileId.value = id
   currentPage.value = 1
+  currentSelection.value = null
 }
 
 const toggleSelectFile = (id: string, e: Event) => {
@@ -385,6 +392,17 @@ const handlePrint = async () => {
   if (!canPrint.value) return
   isPrinting.value = true
 
+  if (printRange.value === 'selection' && currentSelection.value) {
+    try {
+      await printSelection()
+      notification.success({ title: '打印成功', content: '选定内容已发送到打印机' })
+    } catch (e) {
+      notification.error({ title: '打印失败', content: '选定内容打印失败' })
+    }
+    isPrinting.value = false
+    return
+  }
+
   let filesToPrint: PrintFile[] = []
   
   if (printRange.value === 'selection') {
@@ -433,6 +451,70 @@ const handlePrint = async () => {
   }
 
   isPrinting.value = false
+}
+
+const printSelection = async (): Promise<boolean> => {
+  if (!currentSelection.value || !currentSelection.value.htmlContent) {
+    return false
+  }
+
+  const printWindow = window.open('', '_blank', 'width=800,height=600')
+  if (!printWindow) {
+    return false
+  }
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>打印选定内容</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 20px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        table {
+          border-collapse: collapse;
+          width: 100%;
+          font-size: 12px;
+        }
+        th, td {
+          border: 1px solid #d0d7de;
+          padding: 6px 10px;
+          text-align: left;
+          white-space: nowrap;
+        }
+        th {
+          background-color: #f6f8fa;
+          font-weight: 600;
+        }
+        @media print {
+          body { padding: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      ${currentSelection.value.htmlContent}
+    </body>
+    </html>
+  `
+
+  printWindow.document.open()
+  printWindow.document.write(htmlContent)
+  printWindow.document.close()
+
+  return new Promise((resolve) => {
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print()
+        printWindow.onafterprint = () => {
+          printWindow.close()
+          resolve(true)
+        }
+      }, 500)
+    }
+  })
 }
 
 const applyMarginPreset = () => {
@@ -514,7 +596,7 @@ onUnmounted(() => {
           <template #icon>
             <NIcon size="16"><PrintOutline /></NIcon>
           </template>
-          {{ printRange === 'selection' ? `打印选中 (${selectedCount})` : (files.length > 1 ? `批量打印 (${files.length})` : '打印') }}
+          {{ printRange === 'selection' ? '打印选定内容' : (files.length > 1 ? `批量打印 (${files.length})` : '打印') }}
         </NButton>
       </div>
     </div>
@@ -659,7 +741,7 @@ onUnmounted(() => {
             </div>
           </div>
           <div v-else-if="activeFile" class="print-preview-wrapper shadow-xl rounded" :class="{ landscape: orientation === 'landscape' }">
-            <PrintPreview :file="inputFile" />
+            <PrintPreview ref="printPreviewRef" :file="inputFile" @selection-change="handleSelectionChange" />
           </div>
         </div>
       </div>
@@ -766,9 +848,18 @@ onUnmounted(() => {
                   <span class="opacity-60">到</span>
                   <NInputNumber v-model:value="pageTo" :min="1" size="small" placeholder="结束页" style="width: 100px;" />
                 </div>
-                <div v-if="printRange === 'selection'" class="text-xs opacity-70 p-2 rounded" :class="isDark ? 'bg-gray-700/50' : 'bg-gray-100'">
-                  <span>已选择 {{ selectedCount }} 个文件</span>
-                  <NButton size="tiny" text @click="printRange = 'all'">打印全部</NButton>
+                <div v-if="printRange === 'selection'" class="text-xs p-2 rounded" :class="currentSelection ? 'text-green-500 bg-green-50 dark:bg-green-900/20' : 'opacity-70 ' + (isDark ? 'bg-gray-700/50' : 'bg-gray-100')">
+                  <span v-if="currentSelection && currentSelection.type === 'excel'">
+                    已选 {{ currentSelection.endRow - currentSelection.startRow + 1 }} 行 × {{ currentSelection.endCol - currentSelection.startCol + 1 }} 列
+                    <span v-if="currentSelection.sheetName" class="opacity-70">({{ currentSelection.sheetName }})</span>
+                  </span>
+                  <span v-else-if="currentSelection && currentSelection.type === 'word'">
+                    已选中 Word 文档内容
+                  </span>
+                  <span v-else>
+                    请在预览中选择要打印的内容（Excel 拖拽选择单元格 / Word 选中文本）
+                  </span>
+                  <NButton v-if="currentSelection" size="tiny" text @click="printPreviewRef?.clearSelection()">清除选择</NButton>
                 </div>
               </div>
             </div>
@@ -947,7 +1038,7 @@ onUnmounted(() => {
             <template #icon>
               <NIcon><PrintOutline /></NIcon>
             </template>
-            {{ printRange === 'selection' ? `打印选中的 ${selectedCount} 个文件` : (files.length > 1 ? `批量打印 ${files.length} 个文件` : '打印 (Enter)') }}
+            {{ printRange === 'selection' ? '打印选定内容' : (files.length > 1 ? `批量打印 ${files.length} 个文件` : '打印 (Enter)') }}
           </NButton>
         </div>
       </div>
