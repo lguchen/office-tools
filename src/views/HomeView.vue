@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NGrid, NGi, NIcon, NButton, NSpace } from 'naive-ui'
+import { NCard, NIcon, NButton } from 'naive-ui'
 import {
   DocumentTextOutline,
   FileTrayOutline,
@@ -133,10 +133,9 @@ const navigateTo = (path: string) => {
       <p :class="isDark ? 'text-gray-400' : 'text-gray-500'">完全离线、秒开即用，聚焦办公文档场景的高效工具集</p>
     </div>
 
-    <div class="space-y-6">
-      <NGrid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
-        <NGi v-for="category in categories" :key="category.name">
-          <NCard class="hover:border-blue-500/50 transition-colors">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-for="category in categories" :key="category.name">
+        <NCard class="hover:border-blue-500/50 transition-colors h-full">
             <template #header>
               <div class="flex items-center gap-2">
                 <NIcon :size="24" :class="category.color">
@@ -163,8 +162,7 @@ const navigateTo = (path: string) => {
               </div>
             </div>
           </NCard>
-        </NGi>
-      </NGrid>
+      </div>
     </div>
   </div>
 </template>

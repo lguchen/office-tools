@@ -27,11 +27,7 @@
       "csp": null
     }
   },
-  "plugins": {
-    "fs": {
-      "scope": ["$APPDATA/**", "$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$PICTURE/**", "$HOME/**"]
-    }
-  },
+  "plugins": {},
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],

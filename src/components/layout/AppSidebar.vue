@@ -128,9 +128,24 @@ const menuOptions: MenuOption[] = [
   }
 ]
 
+const findItemByKey = (key: string): MenuOption | undefined => {
+  for (const option of menuOptions) {
+    if (option.key === key) return option
+    if (option.children) {
+      for (const child of option.children) {
+        if (child.key === key) return child
+      }
+    }
+  }
+  return undefined
+}
+
 const activeKey = computed(() => {
   const path = route.path
   for (const option of menuOptions) {
+    if ((option as any).path === path) {
+      return option.key as string
+    }
     if (option.children) {
       for (const child of option.children) {
         if ((child as any).path === path) {
@@ -142,9 +157,10 @@ const activeKey = computed(() => {
   return 'home'
 })
 
-const handleMenuSelect = (key: string, item: MenuOption) => {
-  if (item.path) {
-    router.push(item.path)
+const handleMenuSelect = (key: string) => {
+  const item = findItemByKey(key)
+  if (item && (item as any).path) {
+    router.push((item as any).path)
   }
 }
 

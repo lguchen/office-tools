@@ -19,7 +19,7 @@ const isDark = computed(() => settingsStore.theme === 'dark')
   <NConfigProvider :theme="theme">
     <NMessageProvider>
       <NDialogProvider>
-        <NNotificationProvider>
+        <NNotificationProvider :duration="2000">
           <div
             class="h-screen flex flex-col transition-colors duration-300"
             :class="isDark ? 'bg-gray-900' : 'bg-gray-50'"

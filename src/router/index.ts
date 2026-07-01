@@ -1,5 +1,13 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { h } from 'vue'
+import { RouterView } from 'vue-router'
+
+const RouterViewLayout = {
+  render() {
+    return h('div', { class: 'h-full w-full' }, [h(RouterView)])
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -10,6 +18,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/text',
     name: 'text',
+    component: RouterViewLayout,
     redirect: '/text/replace',
     children: [
       {
@@ -42,6 +51,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/codec',
     name: 'codec',
+    component: RouterViewLayout,
     redirect: '/codec/base64',
     children: [
       {
@@ -69,6 +79,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/json',
     name: 'json',
+    component: RouterViewLayout,
     redirect: '/json/format',
     children: [
       {
@@ -91,6 +102,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/calculate',
     name: 'calculate',
+    component: RouterViewLayout,
     redirect: '/calculate/timestamp',
     children: [
       {
@@ -113,6 +125,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/image',
     name: 'image',
+    component: RouterViewLayout,
     redirect: '/image/compress',
     children: [
       {
@@ -140,6 +153,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/convert',
     name: 'convert',
+    component: RouterViewLayout,
     redirect: '/convert/excel',
     children: [
       {
@@ -162,6 +176,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/pdf',
     name: 'pdf',
+    component: RouterViewLayout,
     redirect: '/pdf/merge',
     children: [
       {
@@ -189,6 +204,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/system',
     name: 'system',
+    component: RouterViewLayout,
     redirect: '/system/qrcode',
     children: [
       {
@@ -206,6 +222,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/print',
     name: 'print',
+    component: RouterViewLayout,
     redirect: '/print/manager',
     children: [
       {

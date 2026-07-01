@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NCard, NSpace, NButton } from 'naive-ui'
 import { useSettingsStore } from '../../stores/settings'
 
 interface Props {
@@ -20,27 +19,52 @@ const isDark = computed(() => settingsStore.theme === 'dark')
 </script>
 
 <template>
-  <div class="tool-layout h-full flex flex-col">
-    <div class="mb-4">
-      <h2 class="text-2xl font-bold" :class="isDark ? 'text-blue-400' : 'text-blue-600'">{{ title }}</h2>
-      <p v-if="description" class="mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">{{ description }}</p>
+  <div class="tool-layout h-full flex flex-col p-4">
+    <div class="mb-4 flex-shrink-0">
+      <h2 class="text-xl font-bold" :class="isDark ? 'text-blue-400' : 'text-blue-600'">{{ title }}</h2>
+      <p v-if="description" class="mt-1 text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">{{ description }}</p>
     </div>
-    <div class="flex-1 grid grid-cols-1 gap-4" :class="{ 'lg:grid-cols-2': showOutput }">
-      <NCard title="输入" class="h-full">
-        <slot name="input" />
-      </NCard>
-      <NCard v-if="showOutput" title="输出" class="h-full">
-        <slot name="output" />
-      </NCard>
-      <NCard v-else class="h-full">
-        <slot name="output" />
-      </NCard>
+    <div
+      class="flex-1 flex gap-4 min-h-0"
+      :class="{ 'flex-col lg:flex-row': showOutput }"
+    >
+      <div class="flex-1 flex flex-col min-h-0 rounded-lg border overflow-hidden"
+        :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+      >
+        <div class="px-4 py-2 border-b font-medium flex-shrink-0"
+          :class="isDark ? 'border-gray-700 text-gray-200' : 'border-gray-200 text-gray-700'"
+        >
+          输入
+        </div>
+        <div class="flex-1 p-4 overflow-auto min-h-0">
+          <slot name="input" />
+        </div>
+      </div>
+      <div v-if="showOutput" class="flex-1 flex flex-col min-h-0 rounded-lg border overflow-hidden"
+        :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+      >
+        <div class="px-4 py-2 border-b font-medium flex-shrink-0"
+          :class="isDark ? 'border-gray-700 text-gray-200' : 'border-gray-200 text-gray-700'"
+        >
+          输出
+        </div>
+        <div class="flex-1 p-4 overflow-auto min-h-0">
+          <slot name="output" />
+        </div>
+      </div>
+      <div v-else class="flex-1 flex flex-col min-h-0 rounded-lg border overflow-hidden"
+        :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+      >
+        <div class="flex-1 p-4 overflow-auto min-h-0">
+          <slot name="output" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .tool-layout {
-  height: calc(100vh - 8rem);
+  height: 100%;
 }
 </style>
