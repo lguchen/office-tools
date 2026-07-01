@@ -1,19 +1,40 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useSettingStore } from '@/stores/setting'
-import MainLayout from '@/components/layout/MainLayout.vue'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider, darkTheme, lightTheme } from 'naive-ui'
+import { computed } from 'vue'
+import AppSidebar from './components/layout/AppSidebar.vue'
+import AppHeader from './components/layout/AppHeader.vue'
+import AppFooter from './components/layout/AppFooter.vue'
+import { useSettingsStore } from './stores/settings'
 
-const settingStore = useSettingStore()
+const settingsStore = useSettingsStore()
 
-onMounted(async () => {
-  settingStore.loadSettings()
+const theme = computed(() => {
+  return settingsStore.theme === 'dark' ? darkTheme : lightTheme
 })
+
+const isDark = computed(() => settingsStore.theme === 'dark')
 </script>
 
 <template>
-  <MainLayout />
+  <NConfigProvider :theme="theme">
+    <NMessageProvider>
+      <NDialogProvider>
+        <NNotificationProvider>
+          <div
+            class="h-screen flex flex-col transition-colors duration-300"
+            :class="isDark ? 'bg-gray-900' : 'bg-gray-50'"
+          >
+            <AppHeader />
+            <div class="flex-1 flex overflow-hidden">
+              <AppSidebar />
+              <main class="flex-1 overflow-auto p-4">
+                <router-view />
+              </main>
+            </div>
+            <AppFooter />
+          </div>
+        </NNotificationProvider>
+      </NDialogProvider>
+    </NMessageProvider>
+  </NConfigProvider>
 </template>
-
-<style>
-/* App 级别的全局样式在 styles/index.css 中定义 */
-</style>
