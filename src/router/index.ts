@@ -151,29 +151,6 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/convert',
-    name: 'convert',
-    component: RouterViewLayout,
-    redirect: '/convert/excel',
-    children: [
-      {
-        path: 'excel',
-        name: 'convert-excel',
-        component: () => import('../views/convert/ExcelConvert.vue')
-      },
-      {
-        path: 'markdown',
-        name: 'convert-markdown',
-        component: () => import('../views/convert/MarkdownConvert.vue')
-      },
-      {
-        path: 'encoding',
-        name: 'convert-encoding',
-        component: () => import('../views/convert/EncodingConvert.vue')
-      }
-    ]
-  },
-  {
     path: '/pdf',
     name: 'pdf',
     component: RouterViewLayout,
@@ -198,6 +175,94 @@ const routes: RouteRecordRaw[] = [
         path: 'to-images',
         name: 'pdf-to-images',
         component: () => import('../views/pdf/PdfToImages.vue')
+      }
+    ]
+  },
+  // 新增：Excel工具箱路由
+  {
+    path: '/excel',
+    name: 'excel',
+    component: RouterViewLayout,
+    redirect: '/excel/shortcuts',
+    children: [
+      {
+        path: 'shortcuts',
+        name: 'excel-shortcuts',
+        component: () => import('../views/excel/ExcelShortcuts.vue')
+      },
+      {
+        path: 'functions',
+        name: 'excel-functions',
+        component: () => import('../views/excel/ExcelFunctions.vue')
+      },
+      {
+        path: 'process',
+        name: 'excel-process',
+        component: () => import('../views/excel/ExcelDataProcess.vue')
+      },
+      {
+        path: 'formula',
+        name: 'excel-formula',
+        component: () => import('../views/excel/ExcelFormulaGenerator.vue')
+      },
+      {
+        path: 'split-merge',
+        name: 'excel-split-merge',
+        component: () => import('../views/excel/ExcelSplitMerge.vue')
+      },
+      {
+        path: 'conditional',
+        name: 'excel-conditional',
+        component: () => import('../views/excel/ExcelConditionalFormat.vue')
+      },
+      {
+        path: 'validation',
+        name: 'excel-validation',
+        component: () => import('../views/excel/ExcelDataValidation.vue')
+      }
+    ]
+  },
+  // 新增：Word工具箱路由
+  {
+    path: '/word',
+    name: 'word',
+    component: RouterViewLayout,
+    redirect: '/word/shortcuts',
+    children: [
+      {
+        path: 'shortcuts',
+        name: 'word-shortcuts',
+        component: () => import('../views/word/WordShortcuts.vue')
+      },
+      {
+        path: 'content',
+        name: 'word-content',
+        component: () => import('../views/word/WordBatchContent.vue')
+      },
+      {
+        path: 'format',
+        name: 'word-format',
+        component: () => import('../views/word/WordBatchFormat.vue')
+      },
+      {
+        path: 'bookmark',
+        name: 'word-bookmark',
+        component: () => import('../views/word/WordBookmarkManager.vue')
+      },
+      {
+        path: 'special',
+        name: 'word-special',
+        component: () => import('../views/word/WordSpecialChars.vue')
+      },
+      {
+        path: 'layout',
+        name: 'word-layout',
+        component: () => import('../views/word/WordPageLayout.vue')
+      },
+      {
+        path: 'merge',
+        name: 'word-merge',
+        component: () => import('../views/word/WordMerge.vue')
       }
     ]
   },

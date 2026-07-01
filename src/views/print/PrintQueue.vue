@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NButton, NIcon, NTabs, NTabPane, NCard, NTag, NSpace, NEmpty } from 'naive-ui'
+import { NButton, NIcon, NTag } from 'naive-ui'
 import {
   PrintOutline,
   TrashOutline,
@@ -10,8 +10,11 @@ import {
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import { useNotification } from 'naive-ui'
+import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
+const settingsStore = useSettingsStore()
+const isDark = ref(settingsStore.theme === 'dark')
 
 interface PrintJob {
   id: string
@@ -25,9 +28,7 @@ interface PrintJob {
 
 const activeTab = ref('all')
 
-const jobs = ref<PrintJob[]>([
-  // 示例数据 - 实际应用中从后端获取
-])
+const jobs = ref<PrintJob[]>([])
 
 const filteredJobs = computed(() => {
   if (activeTab.value === 'all') return jobs.value
@@ -42,38 +43,15 @@ const stats = computed(() => ({
   failed: jobs.value.filter(j => j.status === 'failed').length,
 }))
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'queued': return 'warning'
-    case 'printing': return 'info'
-    case 'completed': return 'success'
-    case 'failed': return 'error'
-    case 'cancelled': return 'default'
-    default: return 'default'
-  }
+const statusConfig: Record<string, { color: string; text: string; icon: any; bgClass: string }> = {
+  queued: { color: 'warning', text: '队列中', icon: TextOutline, bgClass: 'bg-yellow-500/20 text-yellow-400' },
+  printing: { color: 'info', text: '打印中', icon: TextOutline, bgClass: 'bg-blue-500/20 text-blue-400' },
+  completed: { color: 'success', text: '已完成', icon: CreateOutline, bgClass: 'bg-green-500/20 text-green-400' },
+  failed: { color: 'error', text: '失败', icon: TrashOutline, bgClass: 'bg-red-500/20 text-red-400' },
+  cancelled: { color: 'default', text: '已取消', icon: TrashOutline, bgClass: 'bg-gray-500/20 text-gray-400' }
 }
 
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'queued': return '队列中'
-    case 'printing': return '打印中'
-    case 'completed': return '已完成'
-    case 'failed': return '失败'
-    case 'cancelled': return '已取消'
-    default: return status
-  }
-}
-
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'queued':
-    case 'printing': return TextOutline
-    case 'completed': return CreateOutline
-    case 'failed':
-    case 'cancelled': return TrashOutline
-    default: return TextOutline
-  }
-}
+const getStatusInfo = (status: string) => statusConfig[status] || statusConfig.queued
 
 const cancelJob = (id: string) => {
   const job = jobs.value.find(j => j.id === id)
@@ -95,6 +73,9 @@ const clearCompleted = () => {
 const refresh = () => {
   notification.info({ title: '已刷新', content: '任务列表已更新' })
 }
+
+const tabs = ['all', 'queued', 'printing', 'completed', 'failed']
+const tabLabels: Record<string, string> = { all: '全部', queued: '等待中', printing: '打印中', completed: '已完成', failed: '失败' }
 </script>
 
 <template>
@@ -116,65 +97,76 @@ const refresh = () => {
           </NButton>
         </div>
 
-        <NCard size="small">
+        <div class="p-4 rounded-lg border" :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
           <div class="grid grid-cols-5 gap-4 text-center">
             <div class="p-2">
               <div class="text-2xl font-bold text-gray-300">{{ stats.all }}</div>
-              <div class="text-xs text-gray-500">全部</div>
+              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">全部</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-yellow-500">{{ stats.queued }}</div>
-              <div class="text-xs text-gray-500">等待中</div>
+              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">等待中</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-blue-500">{{ stats.printing }}</div>
-              <div class="text-xs text-gray-500">打印中</div>
+              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">打印中</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-green-500">{{ stats.completed }}</div>
-              <div class="text-xs text-gray-500">已完成</div>
+              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">已完成</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-red-500">{{ stats.failed }}</div>
-              <div class="text-xs text-gray-500">失败</div>
+              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">失败</div>
             </div>
           </div>
-        </NCard>
+        </div>
       </div>
     </template>
 
     <template #output>
       <div class="h-full flex flex-col">
-        <NTabs v-model:value="activeTab" size="small" class="mb-0">
-          <NTabPane name="all" tab="全部" />
-          <NTabPane name="queued" tab="等待中" />
-          <NTabPane name="printing" tab="打印中" />
-          <NTabPane name="completed" tab="已完成" />
-          <NTabPane name="failed" tab="失败" />
-        </NTabs>
+        <!-- Tab导航 - 简化实现 -->
+        <div class="flex gap-2 mb-4 border-b pb-2" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+          <button
+            v-for="tab in tabs"
+            :key="tab"
+            class="px-3 py-1 rounded text-sm transition-colors"
+            :class="activeTab === tab
+              ? (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600')
+              : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+            @click="activeTab = tab"
+          >
+            {{ tabLabels[tab] }}
+          </button>
+        </div>
 
-        <div class="flex-1 overflow-auto mt-4 min-h-0 space-y-2">
-          <NEmpty v-if="filteredJobs.length === 0" description="暂无任务">
-            <template #icon>
-              <NIcon size="48" class="text-gray-600"><PrintOutline /></NIcon>
-            </template>
-          </NEmpty>
+        <div class="flex-1 overflow-auto min-h-0 space-y-2">
+          <!-- 空状态 -->
+          <div v-if="filteredJobs.length === 0" class="text-center py-12" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <NIcon size="48" class="mb-3 opacity-30">
+              <PrintOutline />
+            </NIcon>
+            <div>暂无任务</div>
+          </div>
 
-          <NCard v-for="job in filteredJobs" :key="job.id" size="small" class="hover:border-blue-500/30">
+          <!-- 任务列表 -->
+          <div
+            v-for="job in filteredJobs"
+            :key="job.id"
+            class="p-3 rounded-lg border transition-colors hover:border-blue-500/30"
+            :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+          >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div :class="[
-                  'w-10 h-10 rounded-lg flex items-center justify-center',
-                  job.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                  job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                  job.status === 'printing' ? 'bg-blue-500/20 text-blue-400' :
-                  'bg-gray-700 text-gray-400'
-                ]">
-                  <NIcon :size="20"><component :is="getStatusIcon(job.status)" /></NIcon>
+                <div :class="['w-10 h-10 rounded-lg flex items-center justify-center', getStatusInfo(job.status).bgClass]">
+                  <NIcon :size="20">
+                    <component :is="getStatusInfo(job.status).icon" />
+                  </NIcon>
                 </div>
                 <div>
                   <div class="font-medium">{{ job.name }}</div>
-                  <div class="text-xs text-gray-400 flex items-center gap-3">
+                  <div class="text-xs flex items-center gap-3" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
                     <span>{{ job.printer }}</span>
                     <span>{{ job.pages }} 页</span>
                     <span>{{ job.size }}</span>
@@ -183,8 +175,8 @@ const refresh = () => {
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <NTag :type="getStatusColor(job.status) as any" size="small">
-                  {{ getStatusText(job.status) }}
+                <NTag :type="getStatusInfo(job.status).color as any" size="small">
+                  {{ getStatusInfo(job.status).text }}
                 </NTag>
                 <NButton
                   v-if="job.status === 'queued' || job.status === 'printing'"
@@ -205,7 +197,7 @@ const refresh = () => {
                 </NButton>
               </div>
             </div>
-          </NCard>
+          </div>
         </div>
       </div>
     </template>

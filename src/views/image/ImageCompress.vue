@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { NInput, NButton, NIcon, NUpload, NUploadDragger, NSlider, NFormItem, NForm, NSpace, NImage, NTag } from 'naive-ui'
-import { CopyOutline } from '@vicons/ionicons5'
+import { NButton, NIcon, NUpload, NUploadDragger, NSlider, NFormItem, NForm, NTag } from 'naive-ui'
+import { FileTrayFullOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
+import ImagePreview from '../../components/common/ImagePreview.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
@@ -139,7 +140,7 @@ const compressionRatio = computed(() => {
         <div class="flex gap-2">
           <NButton type="primary" :disabled="!canCompress" :loading="isProcessing" @click="handleCompress">
             <template #icon>
-              <NIcon><CompressOutline /></NIcon>
+              <NIcon><FileTrayFullOutline /></NIcon>
             </template>
             压缩图片
           </NButton>
@@ -166,8 +167,8 @@ const compressionRatio = computed(() => {
             <span>原图预览</span>
             <NTag size="small" type="info">{{ formatFileSize(originalSize) }}</NTag>
           </div>
-          <div class="flex-1 overflow-auto bg-gray-800 rounded-lg p-2 flex items-center justify-center">
-            <img :src="inputImageUrl" class="max-w-full max-h-full object-contain" />
+          <div class="flex-1 flex items-center justify-center">
+            <ImagePreview :src="inputImageUrl" />
           </div>
         </div>
       </div>
@@ -191,8 +192,8 @@ const compressionRatio = computed(() => {
               <NTag v-if="compressionRatio > 0" size="small" type="success">节省 {{ compressionRatio.toFixed(1) }}%</NTag>
             </div>
           </div>
-          <div class="flex-1 overflow-auto bg-gray-800 rounded-lg p-2 flex items-center justify-center">
-            <img :src="outputImageUrl" class="max-w-full max-h-full object-contain" />
+          <div class="flex-1 flex items-center justify-center">
+            <ImagePreview :src="outputImageUrl" />
           </div>
         </div>
         <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">

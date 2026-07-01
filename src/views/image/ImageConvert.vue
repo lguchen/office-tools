@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NButton, NIcon, NUpload, NUploadDragger, NFormItem, NForm, NTag } from 'naive-ui'
-import { RefreshOutline } from '@vicons/ionicons5'
+import { SyncOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
+import ImagePreview from '../../components/common/ImagePreview.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
@@ -120,7 +121,7 @@ const formatFileSize = (bytes: number): string => {
         <div class="flex gap-2">
           <NButton type="primary" :disabled="!canConvert" :loading="isProcessing" @click="handleConvert">
             <template #icon>
-              <NIcon><RepeatOutline /></NIcon>
+              <NIcon><SyncOutline /></NIcon>
             </template>
             开始转换
           </NButton>
@@ -144,8 +145,8 @@ const formatFileSize = (bytes: number): string => {
 
         <div v-if="inputImageUrl" class="flex-1 min-h-0 flex flex-col">
           <div class="text-sm text-gray-400 mb-2">原图预览</div>
-          <div class="flex-1 overflow-auto bg-gray-800 rounded-lg p-2 flex items-center justify-center">
-            <img :src="inputImageUrl" class="max-w-full max-h-full object-contain" />
+          <div class="flex-1 flex items-center justify-center">
+            <ImagePreview :src="inputImageUrl" />
           </div>
         </div>
       </div>
@@ -166,8 +167,8 @@ const formatFileSize = (bytes: number): string => {
             <span>转换结果</span>
             <NTag size="small" type="success">{{ formatFileSize(outputSize) }}</NTag>
           </div>
-          <div class="flex-1 overflow-auto bg-gray-800 rounded-lg p-2 flex items-center justify-center">
-            <img :src="outputBlobUrl" class="max-w-full max-h-full object-contain" />
+          <div class="flex-1 flex items-center justify-center">
+            <ImagePreview :src="outputBlobUrl" />
           </div>
         </div>
         <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">

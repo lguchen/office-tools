@@ -14,7 +14,8 @@ import {
   CreateOutline,
   FileTrayOutline,
   ChevronBackOutline,
-  ChevronForwardOutline
+  ChevronForwardOutline,
+  GridOutline
 } from '@vicons/ionicons5'
 import { useSettingsStore } from '../../stores/settings'
 
@@ -87,16 +88,6 @@ const menuOptions: MenuOption[] = [
     ]
   },
   {
-    label: '文档转换',
-    key: 'convert',
-    icon: () => h(NIcon, null, { default: () => h(FileTrayOutline) }),
-    children: [
-      { label: 'Excel转换', key: 'convert-excel', path: '/convert/excel' },
-      { label: 'Markdown转换', key: 'convert-markdown', path: '/convert/markdown' },
-      { label: '编码转换', key: 'convert-encoding', path: '/convert/encoding' }
-    ]
-  },
-  {
     label: 'PDF工具箱',
     key: 'pdf',
     icon: () => h(NIcon, null, { default: () => h(DocumentTextOutline) }),
@@ -105,6 +96,36 @@ const menuOptions: MenuOption[] = [
       { label: 'PDF拆分', key: 'pdf-split', path: '/pdf/split' },
       { label: 'PDF压缩', key: 'pdf-compress', path: '/pdf/compress' },
       { label: 'PDF转图片', key: 'pdf-to-images', path: '/pdf/to-images' }
+    ]
+  },
+  // 新增：Excel工具箱
+  {
+    label: 'Excel工具箱',
+    key: 'excel',
+    icon: () => h(NIcon, null, { default: () => h(GridOutline) }),
+    children: [
+      { label: '快捷键查询', key: 'excel-shortcuts', path: '/excel/shortcuts' },
+      { label: '函数说明', key: 'excel-functions', path: '/excel/functions' },
+      { label: '数据处理', key: 'excel-process', path: '/excel/process' },
+      { label: '公式生成器', key: 'excel-formula', path: '/excel/formula' },
+      { label: '拆分合并', key: 'excel-split-merge', path: '/excel/split-merge' },
+      { label: '条件格式', key: 'excel-conditional', path: '/excel/conditional' },
+      { label: '数据验证', key: 'excel-validation', path: '/excel/validation' }
+    ]
+  },
+  // 新增：Word工具箱
+  {
+    label: 'Word工具箱',
+    key: 'word',
+    icon: () => h(NIcon, null, { default: () => h(DocumentTextOutline) }),
+    children: [
+      { label: '快捷键查询', key: 'word-shortcuts', path: '/word/shortcuts' },
+      { label: '批量内容处理', key: 'word-content', path: '/word/content' },
+      { label: '批量格式统一', key: 'word-format', path: '/word/format' },
+      { label: '书签管理', key: 'word-bookmark', path: '/word/bookmark' },
+      { label: '特殊字符处理', key: 'word-special', path: '/word/special' },
+      { label: '页面布局设置', key: 'word-layout', path: '/word/layout' },
+      { label: '文档合并', key: 'word-merge', path: '/word/merge' }
     ]
   },
   {

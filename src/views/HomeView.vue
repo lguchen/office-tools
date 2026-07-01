@@ -9,7 +9,8 @@ import {
   KeyOutline,
   CodeSlashOutline,
   CreateOutline,
-  PrintOutline
+  PrintOutline,
+  GridOutline
 } from '@vicons/ionicons5'
 import { useSettingsStore } from '../stores/settings'
 
@@ -80,16 +81,6 @@ const categories: ToolCategory[] = [
     ]
   },
   {
-    name: '文档转换',
-    icon: FileTrayOutline,
-    color: 'text-orange-400',
-    tools: [
-      { name: 'Excel转换', path: '/convert/excel', desc: 'Excel与CSV互转' },
-      { name: 'Markdown转换', path: '/convert/markdown', desc: 'Markdown与HTML互转' },
-      { name: '编码转换', path: '/convert/encoding', desc: '文件编码互转(GBK/UTF-8)' }
-    ]
-  },
-  {
     name: 'PDF工具箱',
     icon: DocumentTextOutline,
     color: 'text-red-400',
@@ -98,6 +89,30 @@ const categories: ToolCategory[] = [
       { name: 'PDF拆分', path: '/pdf/split', desc: '按页码范围拆分PDF' },
       { name: 'PDF压缩', path: '/pdf/compress', desc: '减小PDF文件大小' },
       { name: 'PDF转图片', path: '/pdf/to-images', desc: '将PDF页面转为图片' }
+    ]
+  },
+  // 新增：Excel工具箱
+  {
+    name: 'Excel工具箱',
+    icon: GridOutline,
+    color: 'text-green-400',
+    tools: [
+      { name: '快捷键查询', path: '/excel/shortcuts', desc: 'Excel常用快捷键大全' },
+      { name: '函数说明', path: '/excel/functions', desc: 'Excel函数语法和用法说明' },
+      { name: '数据处理', path: '/excel/process', desc: '批量处理Excel数据' },
+      { name: '公式生成器', path: '/excel/formula', desc: '可视化生成Excel公式' }
+    ]
+  },
+  // 新增：Word工具箱
+  {
+    name: 'Word工具箱',
+    icon: DocumentTextOutline,
+    color: 'text-blue-400',
+    tools: [
+      { name: '快捷键查询', path: '/word/shortcuts', desc: 'Word常用快捷键大全' },
+      { name: '批量内容处理', path: '/word/content', desc: '批量查找替换文档内容' },
+      { name: '批量格式统一', path: '/word/format', desc: '统一字体和段落格式' },
+      { name: '文档合并', path: '/word/merge', desc: '合并多个Word文档' }
     ]
   },
   {

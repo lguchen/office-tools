@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { NInputNumber, NButton, NIcon, NUpload, NUploadDragger, NFormItem, NForm, NSwitch, NTag } from 'naive-ui'
-import { CreateOutline } from '@vicons/ionicons5'
+import { CropOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
+import ImagePreview from '../../components/common/ImagePreview.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
@@ -237,7 +238,7 @@ const applyPreset = (preset: any) => {
         <div class="flex gap-2">
           <NButton type="primary" :disabled="!canResize" :loading="isProcessing" @click="handleResize">
             <template #icon>
-              <NIcon><ResizeOutline /></NIcon>
+              <NIcon><CropOutline /></NIcon>
             </template>
             调整尺寸
           </NButton>
@@ -258,8 +259,11 @@ const applyPreset = (preset: any) => {
           </NUploadDragger>
         </NUpload>
 
-        <div v-if="inputImageUrl" class="flex-1 min-h-0 overflow-auto bg-gray-800 rounded-lg p-2 flex items-center justify-center">
-          <img :src="inputImageUrl" class="max-w-full max-h-full object-contain" />
+        <div v-if="inputImageUrl" class="flex-1 min-h-0 flex flex-col">
+          <div class="text-sm text-gray-400 mb-2">原图预览</div>
+          <div class="flex-1 flex items-center justify-center">
+            <ImagePreview :src="inputImageUrl" />
+          </div>
         </div>
       </div>
     </template>
@@ -279,8 +283,8 @@ const applyPreset = (preset: any) => {
             <span>输出结果</span>
             <NTag size="small" type="success">{{ formatFileSize(outputSize) }}</NTag>
           </div>
-          <div class="flex-1 overflow-auto bg-gray-800 rounded-lg p-2 flex items-center justify-center">
-            <img :src="outputBlobUrl" class="max-w-full max-h-full object-contain" />
+          <div class="flex-1 flex items-center justify-center">
+            <ImagePreview :src="outputBlobUrl" />
           </div>
         </div>
         <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">

@@ -80,8 +80,9 @@ Light Office Tools is a desktop application built with Tauri 2.0 that provides a
 | **JSON Tools** | Format, validate, compress/minify |
 | **Calculators** | Timestamp converter, base converter, UUID generator |
 | **Image Tools** | Compress, format convert, resize, color picker |
-| **Document Convert** | Excel conversion, Markdown conversion, encoding conversion |
-| **PDF Tools** | Merge, split, compress, PDF to images |
+| **PDF Toolbox** | Merge, split, compress, PDF to images |
+| **Excel Toolbox** | Shortcuts reference, function guide, data processing, formula generator, split/merge, conditional formatting, data validation |
+| **Word Toolbox** | Shortcuts reference, batch content processing, batch format unification, bookmark manager, special chars processing, page layout settings, document merge |
 | **QR Code** | Generate QR code, scan QR code from image |
 | **Print Manager** | Single print, batch print, print queue, printer management |
 
@@ -426,10 +427,22 @@ office-tools/
 │   │   │   ├── HashCalc.vue         # Hash calculator
 │   │   │   ├── UnicodeCodec.vue     # Unicode converter
 │   │   │   └── UrlCodec.vue         # URL encoder/decoder
-│   │   ├── convert/                 # Document conversion tools
-│   │   │   ├── EncodingConvert.vue  # Text encoding converter
-│   │   │   ├── ExcelConvert.vue     # Excel format converter
-│   │   │   └── MarkdownConvert.vue  # Markdown converter
+│   │   ├── excel/                   # Excel toolbox (NEW)
+│   │   │   ├── ExcelShortcuts.vue   # Excel shortcuts reference
+│   │   │   ├── ExcelFunctions.vue   # Excel function guide
+│   │   │   ├── ExcelDataProcess.vue # Excel batch data processing
+│   │   │   ├── ExcelFormulaGenerator.vue # Formula generator
+│   │   │   ├── ExcelSplitMerge.vue  # Excel split/merge
+│   │   │   ├── ExcelConditionalFormat.vue # Conditional formatting
+│   │   │   └── ExcelDataValidation.vue # Data validation
+│   │   ├── word/                    # Word toolbox (NEW)
+│   │   │   ├── WordShortcuts.vue    # Word shortcuts reference
+│   │   │   ├── WordBatchContent.vue # Batch content processing
+│   │   │   ├── WordBatchFormat.vue  # Batch format unification
+│   │   │   ├── WordBookmarkManager.vue # Bookmark manager
+│   │   │   ├── WordSpecialChars.vue # Special characters processing
+│   │   │   ├── WordPageLayout.vue   # Page layout settings
+│   │   │   └── WordMerge.vue        # Word document merge
 │   │   ├── image/                   # Image processing tools
 │   │   │   ├── ColorPicker.vue      # Color picker
 │   │   │   ├── ImageCompress.vue    # Image compressor
@@ -857,7 +870,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON tools (format, validate, compress)
 - Calculator tools (timestamp, base conversion, UUID)
 - Image tools (compress, convert, resize, color picker)
-- Document conversion tools (Excel, Markdown, encoding)
+- **Excel Toolbox** (7 tools)
+  - Shortcuts reference (110+ shortcuts in 11 categories)
+  - Function guide (60+ functions in 6 categories)
+  - Batch data processing (dedup, empty rows, format, text, sort)
+  - Formula generator (11 formula types with visual builder)
+  - Excel split/merge (split by sheet/rows, merge multiple files)
+  - Conditional formatting (duplicate values, empty cells, threshold, text)
+  - Data validation (integer/decimal range, text length, dropdown list)
+- **Word Toolbox** (7 tools)
+  - Shortcuts reference (100+ shortcuts in 10 categories)
+  - Batch content processing (find & replace, delete content)
+  - Batch format unification (font, paragraph formatting)
+  - Bookmark manager (add, delete, rename bookmarks)
+  - Special characters processing (line breaks, spaces, tabs, control chars)
+  - Page layout settings (margins, paper size, orientation, header/footer)
+  - Word document merge (append, merge as chapters)
 - PDF tools (merge, split, compress, to images)
 - QR code generator and scanner
 - Print management (single, batch, queue, printer management)
@@ -865,6 +893,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frosted glass UI design
 - Drag and drop file upload
 - Portable and installer release builds
+- Image preview with zoom, drag, resize features
+
+#### Changed
+- Removed "Document Conversion" module (Excel/Markdown/Encoding conversion)
+- Optimized print management page performance (replaced NGrid with CSS Grid)
+- Fixed drag-and-drop upload in packaged exe (using Tauri event API)
+- Improved image preview component (zoom 0.1x-10x, drag move, resize window)
 
 #### Known Issues
 - OCR features require additional model downloads

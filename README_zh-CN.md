@@ -80,8 +80,9 @@
 | **JSON 工具** | 格式化、校验、压缩/精简 |
 | **计算工具** | 时间戳转换、进制转换、UUID 生成器 |
 | **图片工具** | 压缩、格式转换、尺寸调整、取色器 |
-| **文档转换** | Excel 转换、Markdown 转换、编码转换 |
-| **PDF 工具** | 合并、分割、压缩、PDF 转图片 |
+| **PDF 工具箱** | 合并、分割、压缩、PDF 转图片 |
+| **Excel 工具箱** | 快捷键查询、函数说明、数据处理、公式生成器、拆分合并、条件格式、数据验证 |
+| **Word 工具箱** | 快捷键查询、批量内容处理、批量格式统一、书签管理、特殊字符处理、页面布局设置、文档合并 |
 | **二维码** | 生成二维码、图片识别二维码 |
 | **打印管理** | 单文件打印、批量打印、打印队列、打印机管理 |
 
@@ -426,10 +427,22 @@ office-tools/
 │   │   │   ├── HashCalc.vue         # 哈希计算器
 │   │   │   ├── UnicodeCodec.vue     # Unicode 转换
 │   │   │   └── UrlCodec.vue         # URL 编解码
-│   │   ├── convert/                 # 文档转换工具
-│   │   │   ├── EncodingConvert.vue  # 文本编码转换
-│   │   │   ├── ExcelConvert.vue     # Excel 格式转换
-│   │   │   └── MarkdownConvert.vue  # Markdown 转换
+│   │   ├── excel/                   # Excel 工具箱（新增）
+│   │   │   ├── ExcelShortcuts.vue   # Excel 快捷键查询
+│   │   │   ├── ExcelFunctions.vue   # Excel 函数说明
+│   │   │   ├── ExcelDataProcess.vue # Excel 批量数据处理
+│   │   │   ├── ExcelFormulaGenerator.vue # 公式生成器
+│   │   │   ├── ExcelSplitMerge.vue  # Excel 拆分合并
+│   │   │   ├── ExcelConditionalFormat.vue # 条件格式工具
+│   │   │   └── ExcelDataValidation.vue # 数据验证工具
+│   │   ├── word/                    # Word 工具箱（新增）
+│   │   │   ├── WordShortcuts.vue    # Word 快捷键查询
+│   │   │   ├── WordBatchContent.vue # 批量内容处理
+│   │   │   ├── WordBatchFormat.vue  # 批量格式统一
+│   │   │   ├── WordBookmarkManager.vue # 书签管理
+│   │   │   ├── WordSpecialChars.vue # 特殊字符处理
+│   │   │   ├── WordPageLayout.vue   # 页面布局设置
+│   │   │   └── WordMerge.vue        # Word 文档合并
 │   │   ├── image/                   # 图片处理工具
 │   │   │   ├── ColorPicker.vue      # 取色器
 │   │   │   ├── ImageCompress.vue    # 图片压缩
@@ -857,7 +870,22 @@ docs: 更新 README 添加 Docker 说明
 - JSON 工具（格式化、校验、压缩）
 - 计算工具（时间戳、进制转换、UUID）
 - 图片工具（压缩、转换、调整、取色）
-- 文档转换工具（Excel、Markdown、编码）
+- **Excel 工具箱**（7个工具）
+  - 快捷键查询（110+快捷键，11个分类）
+  - 函数说明（60+函数，6个分类）
+  - 批量数据处理（去重、删除空行、格式统一、文本处理、排序）
+  - 公式生成器（11种公式类型，可视化生成）
+  - Excel 拆分合并（按工作表/行数拆分，合并多个文件）
+  - 条件格式工具（重复值、空值、阈值、文本高亮）
+  - 数据验证工具（整数/小数范围、文本长度、下拉列表）
+- **Word 工具箱**（7个工具）
+  - 快捷键查询（100+快捷键，10个分类）
+  - 批量内容处理（查找替换、删除内容）
+  - 批量格式统一（字体、段落格式）
+  - 书签管理（添加、删除、重命名书签）
+  - 特殊字符处理（换行符、空格、制表符、控制字符）
+  - 页面布局设置（页边距、纸张大小、方向、页眉页脚）
+  - Word 文档合并（追加、合并为新章节）
 - PDF 工具（合并、分割、压缩、转图片）
 - 二维码生成与识别
 - 打印管理（单文件、批量、队列、打印机管理）
@@ -865,6 +893,13 @@ docs: 更新 README 添加 Docker 说明
 - 毛玻璃 UI 设计
 - 拖拽文件上传
 - 便携版和安装版发布构建
+- 图片预览功能（缩放、拖拽、调整窗口大小）
+
+#### 变更
+- 删除"文档转换"模块（Excel/Markdown/编码转换）
+- 优化打印管理页面性能（用CSS Grid替代NGrid）
+- 修复打包exe后拖拽上传失效问题（使用Tauri event API）
+- 完善图片预览组件（支持0.1x-10x缩放、拖拽移动、调整窗口大小）
 
 #### 已知问题
 - OCR 功能需要额外下载模型
