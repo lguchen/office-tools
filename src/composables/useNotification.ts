@@ -26,17 +26,29 @@ export function useDialogService() {
 }
 
 export function showSuccess(msg: string) {
-  useMessageService().success(msg)
+  useMessageService().success(msg, { duration: 2000 })
 }
 
 export function showError(msg: string) {
-  useMessageService().error(msg)
+  useMessageService().error(msg, { duration: 2000 })
 }
 
 export function showInfo(msg: string) {
-  useMessageService().info(msg)
+  useMessageService().info(msg, { duration: 2000 })
 }
 
 export function showWarning(msg: string) {
-  useMessageService().warning(msg)
+  useMessageService().warning(msg, { duration: 2000 })
+}
+
+export function notifySuccess(title: string, content: string) {
+  useNotificationService().success({ title, content, duration: 2000 })
+}
+
+export function notifyError(title: string, content: string) {
+  useNotificationService().error({ title, content, duration: 2000 })
+}
+
+export function notifyInfo(title: string, content: string) {
+  useNotificationService().info({ title, content, duration: 2000 })
 }

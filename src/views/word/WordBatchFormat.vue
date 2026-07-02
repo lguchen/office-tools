@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Word批量格式统一页面
   技术说明：使用docx库处理Word文档
   安装：npm install docx
@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NInput,
@@ -34,6 +35,14 @@ import {
   convertInchesToTwip
 } from 'docx'
 import {
+  loadDocx,
+  getDocumentXml,
+  saveDocx,
+  modifyTextStyles,
+  modifyDefaultStyles,
+  extractText
+} from '../../composables/useDocxEdit'
+import {
   DocumentOutline,
   TrashOutline,
   CreateOutline,
@@ -43,11 +52,9 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 上传的文件列表
 const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
@@ -142,124 +149,35 @@ const handleProcess = async () => {
   }))
 
   try {
-    // 模拟处理过程
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i]
+      try {
+        const arrayBuffer = await file.file!.arrayBuffer()
+        const result = await processDocxStyles(arrayBuffer)
 
-      // 创建一个新的格式化文档（演示用）
-      const doc = new Document({
-        sections: [{
-          properties: {
-            page: {
-              margin: {
-                top: convertInchesToTwip(1),
-                right: convertInchesToTwip(1),
-                bottom: convertInchesToTwip(1),
-                left: convertInchesToTwip(1)
-              }
-            }
-          },
-          children: [
-            new Paragraph({
-              text: `格式化后的文档: ${file.name}`,
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.CENTER
-            }),
-            new Paragraph({
-              alignment: paragraphSettings.value.alignment === 'left' ? AlignmentType.LEFT
-                : paragraphSettings.value.alignment === 'center' ? AlignmentType.CENTER
-                : paragraphSettings.value.alignment === 'right' ? AlignmentType.RIGHT
-                : AlignmentType.JUSTIFIED,
-              spacing: {
-                line: paragraphSettings.value.lineHeight * 240,
-                before: paragraphSettings.value.spaceBefore * 20,
-                after: paragraphSettings.value.spaceAfter * 20
-              },
-              indent: {
-                left: convertInchesToTwip(paragraphSettings.value.indentLeft),
-                right: convertInchesToTwip(paragraphSettings.value.indentRight),
-                firstLine: convertInchesToTwip(paragraphSettings.value.indentFirstLine)
-              },
-              children: [
-                new TextRun({
-                  text: '本文档已应用统一的格式设置。字体、段落样式已按要求调整。',
-                  font: fontSettings.value.fontFamily,
-                  size: fontSettings.value.fontSize * 2,
-                  color: fontSettings.value.fontColor.replace('#', ''),
-                  bold: fontSettings.value.bold,
-                  italics: fontSettings.value.italic
-                })
-              ]
-            })
-          ]
-        }]
-      })
+        if (i === 0) {
+          processedBuffer.value = result
+        }
 
-      processResults.value[i] = {
-        name: file.name,
-        status: 'success',
-        message: '处理完成'
+        processResults.value[i] = {
+          name: file.name,
+          status: 'success',
+          message: '处理完成'
+        }
+      } catch (err) {
+        processResults.value[i] = {
+          name: file.name,
+          status: 'error',
+          message: (err as Error).message
+        }
       }
     }
 
     notification.success({ title: '处理完成', content: '所有文件格式化成功' })
 
-    if (validFiles.length > 0) {
-      const firstFile = validFiles[0]
-      const firstDoc = new Document({
-        sections: [{
-          properties: {
-            page: {
-              margin: {
-                top: convertInchesToTwip(1),
-                right: convertInchesToTwip(1),
-                bottom: convertInchesToTwip(1),
-                left: convertInchesToTwip(1)
-              }
-            }
-          },
-          children: [
-            new Paragraph({
-              text: `格式化后的文档: ${firstFile.name}`,
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.CENTER
-            }),
-            new Paragraph({
-              alignment: paragraphSettings.value.alignment === 'left' ? AlignmentType.LEFT
-                : paragraphSettings.value.alignment === 'center' ? AlignmentType.CENTER
-                : paragraphSettings.value.alignment === 'right' ? AlignmentType.RIGHT
-                : AlignmentType.JUSTIFIED,
-              spacing: {
-                line: paragraphSettings.value.lineHeight * 240,
-                before: paragraphSettings.value.spaceBefore * 20,
-                after: paragraphSettings.value.spaceAfter * 20
-              },
-              indent: {
-                left: convertInchesToTwip(paragraphSettings.value.indentLeft),
-                right: convertInchesToTwip(paragraphSettings.value.indentRight),
-                firstLine: convertInchesToTwip(paragraphSettings.value.indentFirstLine)
-              },
-              children: [
-                new TextRun({
-                  text: '本文档已应用统一的格式设置。字体、段落样式已按要求调整。',
-                  font: fontSettings.value.fontFamily,
-                  size: fontSettings.value.fontSize * 2,
-                  color: fontSettings.value.fontColor.replace('#', ''),
-                  bold: fontSettings.value.bold,
-                  italics: fontSettings.value.italic
-                })
-              ]
-            })
-          ]
-        }]
-      })
-      const blob = await Packer.toBlob(firstDoc)
-      processedBuffer.value = await blob.arrayBuffer()
-
-      await nextTick()
-      if (isDetached.value && detachableRef.value) {
-        detachableRef.value.syncContent()
-      }
+    await nextTick()
+    if (isDetached.value && detachableRef.value) {
+      detachableRef.value.syncContent()
     }
   } catch (error) {
     notification.error({ title: '处理失败', content: (error as Error).message })
@@ -273,66 +191,44 @@ const handleProcess = async () => {
   }
 }
 
+// 使用 JSZip 修改原始 docx 的样式，保留原文内容
+const processDocxStyles = async (arrayBuffer: ArrayBuffer): Promise<ArrayBuffer> => {
+  const zip = await loadDocx(arrayBuffer)
+  let documentXml = await getDocumentXml(zip)
+
+  // 修改文档中所有 run 的字体和字号
+  documentXml = modifyTextStyles(documentXml, {
+    fontName: fontSettings.value.fontFamily,
+    fontSize: fontSettings.value.fontSize * 2 // docx 中字号是半磅
+  })
+
+  // 修改默认样式
+  await modifyDefaultStyles(zip, {
+    fontName: fontSettings.value.fontFamily,
+    fontSize: fontSettings.value.fontSize * 2
+  })
+
+  return await saveDocx(zip, documentXml)
+}
+
 // 下载处理后的文档
 const handleDownload = async (index: number) => {
   const file = fileList.value[index]
-  if (!file) return
+  if (!file || !file.file) return
 
-  const doc = new Document({
-    sections: [{
-      properties: {
-        page: {
-          margin: {
-            top: convertInchesToTwip(1),
-            right: convertInchesToTwip(1),
-            bottom: convertInchesToTwip(1),
-            left: convertInchesToTwip(1)
-          }
-        }
-      },
-      children: [
-        new Paragraph({
-          text: `格式化后的文档: ${file.name}`,
-          heading: HeadingLevel.HEADING_1,
-          alignment: AlignmentType.CENTER
-        }),
-        new Paragraph({
-          alignment: paragraphSettings.value.alignment === 'left' ? AlignmentType.LEFT
-            : paragraphSettings.value.alignment === 'center' ? AlignmentType.CENTER
-            : paragraphSettings.value.alignment === 'right' ? AlignmentType.RIGHT
-            : AlignmentType.JUSTIFIED,
-          spacing: {
-            line: paragraphSettings.value.lineHeight * 240,
-            before: paragraphSettings.value.spaceBefore * 20,
-            after: paragraphSettings.value.spaceAfter * 20
-          },
-          indent: {
-            left: convertInchesToTwip(paragraphSettings.value.indentLeft),
-            right: convertInchesToTwip(paragraphSettings.value.indentRight),
-            firstLine: convertInchesToTwip(paragraphSettings.value.indentFirstLine)
-          },
-          children: [
-            new TextRun({
-              text: '本文档已应用统一的格式设置。',
-              font: fontSettings.value.fontFamily,
-              size: fontSettings.value.fontSize * 2,
-              color: fontSettings.value.fontColor.replace('#', ''),
-              bold: fontSettings.value.bold,
-              italics: fontSettings.value.italic
-            })
-          ]
-        })
-      ]
-    }]
-  })
-
-  const blob = await Packer.toBlob(doc)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `formatted_${file.name}`
-  a.click()
-  URL.revokeObjectURL(url)
+  try {
+    const arrayBuffer = await file.file.arrayBuffer()
+    const result = await processDocxStyles(arrayBuffer)
+    const blob = new Blob([result], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `formatted_${file.name}`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    notification.error({ title: '下载失败', content: (err as Error).message })
+  }
 }
 
 // 批量下载
@@ -368,58 +264,7 @@ const doProcessForPreview = async () => {
   if (!originalBuffer.value || fileList.value.length === 0) return
 
   try {
-    const firstFile = fileList.value[0]
-
-    const doc = new Document({
-      sections: [{
-        properties: {
-          page: {
-            margin: {
-              top: convertInchesToTwip(1),
-              right: convertInchesToTwip(1),
-              bottom: convertInchesToTwip(1),
-              left: convertInchesToTwip(1)
-            }
-          }
-        },
-        children: [
-          new Paragraph({
-            text: `格式化后的文档: ${firstFile.name}`,
-            heading: HeadingLevel.HEADING_1,
-            alignment: AlignmentType.CENTER
-          }),
-          new Paragraph({
-            alignment: paragraphSettings.value.alignment === 'left' ? AlignmentType.LEFT
-              : paragraphSettings.value.alignment === 'center' ? AlignmentType.CENTER
-              : paragraphSettings.value.alignment === 'right' ? AlignmentType.RIGHT
-              : AlignmentType.JUSTIFIED,
-            spacing: {
-              line: paragraphSettings.value.lineHeight * 240,
-              before: paragraphSettings.value.spaceBefore * 20,
-              after: paragraphSettings.value.spaceAfter * 20
-            },
-            indent: {
-              left: convertInchesToTwip(paragraphSettings.value.indentLeft),
-              right: convertInchesToTwip(paragraphSettings.value.indentRight),
-              firstLine: convertInchesToTwip(paragraphSettings.value.indentFirstLine)
-            },
-            children: [
-              new TextRun({
-                text: '本文档已应用统一的格式设置。字体、段落样式已按要求调整。',
-                font: fontSettings.value.fontFamily,
-                size: fontSettings.value.fontSize * 2,
-                color: fontSettings.value.fontColor.replace('#', ''),
-                bold: fontSettings.value.bold,
-                italics: fontSettings.value.italic
-              })
-            ]
-          })
-        ]
-      }]
-    })
-
-    const blob = await Packer.toBlob(doc)
-    processedBuffer.value = await blob.arrayBuffer()
+    processedBuffer.value = await processDocxStyles(originalBuffer.value)
 
     await nextTick()
     if (isDetached.value && detachableRef.value) {

@@ -1,5 +1,6 @@
-<script setup lang="ts">
-import { ref, computed } from 'vue'
+﻿<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NRadioGroup, NRadio, NInputNumber, NSpace, NTag, NDataTable, NScrollbar, NProgress, NSelect } from 'naive-ui'
 import { CutOutline, GitMergeOutline, CloudUploadOutline, DownloadOutline, TrashOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
@@ -11,11 +12,9 @@ import { useNotification } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs'
 import * as XLSX from 'xlsx'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 模式切换
 const mode = ref<'split' | 'merge'>('split')
@@ -48,10 +47,25 @@ const currentPreviewWorkbook = computed(() => {
   return previewWorkbooks.value[currentPreviewIndex.value]?.workbook || null
 })
 
-const currentPreviewArrayBuffer = computed(() => {
-  if (!currentPreviewWorkbook.value) return null
+// 改为 ref，避免 computed 中频繁序列化
+const currentPreviewArrayBuffer = ref<ArrayBuffer | null>(null)
+
+// 显式更新预览 buffer
+const updatePreviewBuffer = () => {
+  if (!currentPreviewWorkbook.value) {
+    currentPreviewArrayBuffer.value = null
+    return
+  }
   const wbout = XLSX.write(currentPreviewWorkbook.value, { bookType: 'xlsx', type: 'array' })
-  return wbout as ArrayBuffer
+  currentPreviewArrayBuffer.value = wbout as ArrayBuffer
+  if (isDetached.value && detachableRef.value) {
+    detachableRef.value.syncContent()
+  }
+}
+
+// 监听预览索引变化时更新 buffer
+watch(currentPreviewWorkbook, () => {
+  updatePreviewBuffer()
 })
 
 // 表格列定义（用于显示输出结果）

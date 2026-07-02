@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NSlider, NFormItem, NForm, NTag } from 'naive-ui'
 import { FileTrayFullOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
@@ -10,11 +11,9 @@ import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')

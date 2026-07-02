@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Word页面布局批量设置页面
   技术说明：使用docx库处理Word文档
   安装：npm install docx
@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NCard,
@@ -23,15 +24,11 @@ import {
   useNotification
 } from 'naive-ui'
 import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  Header,
-  Footer,
-  PageOrientation,
-  convertInchesToTwip
-} from 'docx'
+  loadDocx,
+  getDocumentXml,
+  saveDocx,
+  modifySectionProperties
+} from '../../composables/useDocxEdit'
 import {
   DocumentOutline,
   CreateOutline,
@@ -41,11 +38,9 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const displayBuffer = computed(() => {
   if (previewMode.value === 'processed' && processedBuffer.value) {
@@ -96,21 +91,23 @@ const paperSizeOptions = [
   { label: 'B5 (176mm × 250mm)', value: 'B5' }
 ]
 
-// 获取纸张尺寸
+// 获取纸张尺寸（twips为单位，1 inch = 1440 twips）
 const getPaperSize = (size: string) => {
   switch (size) {
     case 'A4':
-      return { width: convertInchesToTwip(8.27), height: convertInchesToTwip(11.69) }
+      return { width: 11906, height: 16838 }
+    case 'A3':
+      return { width: 16838, height: 23811 }
     case 'A5':
-      return { width: convertInchesToTwip(5.83), height: convertInchesToTwip(8.27) }
+      return { width: 8391, height: 11906 }
     case 'Letter':
-      return { width: convertInchesToTwip(8.5), height: convertInchesToTwip(11) }
+      return { width: 12240, height: 15840 }
     case 'Legal':
-      return { width: convertInchesToTwip(8.5), height: convertInchesToTwip(14) }
+      return { width: 12240, height: 20160 }
     case 'B5':
-      return { width: convertInchesToTwip(6.93), height: convertInchesToTwip(9.84) }
+      return { width: 10319, height: 14570 }
     default:
-      return { width: convertInchesToTwip(8.27), height: convertInchesToTwip(11.69) }
+      return { width: 11906, height: 16838 }
   }
 }
 
@@ -138,95 +135,39 @@ const debounceProcess = () => {
   }, 300)
 }
 
+// 处理 docx：基于原始文件修改 sectPr（纸张大小、方向、页边距），保留原文档内容
+const processDocxLayout = async (arrayBuffer: ArrayBuffer): Promise<ArrayBuffer> => {
+  const zip = await loadDocx(arrayBuffer)
+  const documentXml = await getDocumentXml(zip)
+
+  const paperSize = getPaperSize(pageSettings.value.paperSize)
+  const isLandscape = pageSettings.value.orientation === 'landscape'
+
+  const newXml = modifySectionProperties(documentXml, {
+    pageSize: {
+      width: isLandscape ? paperSize.height : paperSize.width,
+      height: isLandscape ? paperSize.width : paperSize.height,
+      orientation: isLandscape ? 'landscape' : 'portrait'
+    },
+    margins: {
+      top: Math.round(pageSettings.value.marginTop * 1440),
+      right: Math.round(pageSettings.value.marginRight * 1440),
+      bottom: Math.round(pageSettings.value.marginBottom * 1440),
+      left: Math.round(pageSettings.value.marginLeft * 1440),
+      header: Math.round(pageSettings.value.headerMargin * 1440),
+      footer: Math.round(pageSettings.value.footerMargin * 1440)
+    }
+  })
+
+  return await saveDocx(zip, newXml)
+}
+
 // 生成预览用的处理结果（仅处理第一个文件）
 const doProcessPreview = async () => {
-  if (!fileList.value[0]?.file) return
+  if (!originalBuffer.value) return
 
   try {
-    const paperSize = getPaperSize(pageSettings.value.paperSize)
-    const isLandscape = pageSettings.value.orientation === 'landscape'
-    const file = fileList.value[0]
-
-    const doc = new Document({
-      sections: [{
-        properties: {
-          page: {
-            margin: {
-              top: convertInchesToTwip(pageSettings.value.marginTop),
-              bottom: convertInchesToTwip(pageSettings.value.marginBottom),
-              left: convertInchesToTwip(pageSettings.value.marginLeft),
-              right: convertInchesToTwip(pageSettings.value.marginRight)
-            },
-            size: {
-              width: isLandscape ? paperSize.height : paperSize.width,
-              height: isLandscape ? paperSize.width : paperSize.height,
-              orientation: isLandscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT
-            }
-          }
-        },
-        headers: pageSettings.value.headerText ? {
-          default: new Header({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: pageSettings.value.headerText
-                  })
-                ]
-              })
-            ]
-          })
-        } : undefined,
-        footers: pageSettings.value.footerText ? {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: 'center',
-                children: [
-                  new TextRun({
-                    text: pageSettings.value.footerText
-                  })
-                ]
-              })
-            ]
-          })
-        } : undefined,
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `页面布局设置后的文档: ${file.name}`,
-                bold: true
-              })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `纸张大小: ${pageSettings.value.paperSize}`
-              })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `纸张方向: ${pageSettings.value.orientation === 'portrait' ? '纵向' : '横向'}`
-              })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `页边距: 上${pageSettings.value.marginTop}" 下${pageSettings.value.marginBottom}" 左${pageSettings.value.marginLeft}" 右${pageSettings.value.marginRight}"`
-              })
-            ]
-          })
-        ]
-      }]
-    })
-
-    const blob = await Packer.toBlob(doc)
-    processedBuffer.value = await blob.arrayBuffer()
+    processedBuffer.value = await processDocxLayout(originalBuffer.value)
 
     await nextTick()
     if (isDetached.value && detachableRef.value) {
@@ -258,94 +199,30 @@ const handleProcess = async () => {
   }))
 
   try {
-    const paperSize = getPaperSize(pageSettings.value.paperSize)
-    const isLandscape = pageSettings.value.orientation === 'landscape'
-
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i]
-
-      const doc = new Document({
-        sections: [{
-          properties: {
-            page: {
-              margin: {
-                top: convertInchesToTwip(pageSettings.value.marginTop),
-                bottom: convertInchesToTwip(pageSettings.value.marginBottom),
-                left: convertInchesToTwip(pageSettings.value.marginLeft),
-                right: convertInchesToTwip(pageSettings.value.marginRight)
-              },
-              size: {
-                width: isLandscape ? paperSize.height : paperSize.width,
-                height: isLandscape ? paperSize.width : paperSize.height,
-                orientation: isLandscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT
-              }
-            }
-          },
-          headers: pageSettings.value.headerText ? {
-            default: new Header({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: pageSettings.value.headerText
-                    })
-                  ]
-                })
-              ]
-            })
-          } : undefined,
-          footers: pageSettings.value.footerText ? {
-            default: new Footer({
-              children: [
-                new Paragraph({
-                  alignment: 'center',
-                  children: [
-                    new TextRun({
-                      text: pageSettings.value.footerText
-                    })
-                  ]
-                })
-              ]
-            })
-          } : undefined,
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `页面布局设置后的文档: ${file.name}`,
-                  bold: true
-                })
-              ]
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `纸张大小: ${pageSettings.value.paperSize}`
-                })
-              ]
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `纸张方向: ${pageSettings.value.orientation === 'portrait' ? '纵向' : '横向'}`
-                })
-              ]
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `页边距: 上${pageSettings.value.marginTop}" 下${pageSettings.value.marginBottom}" 左${pageSettings.value.marginLeft}" 右${pageSettings.value.marginRight}"`
-                })
-              ]
-            })
-          ]
-        }]
-      })
-
-      processResults.value[i] = {
-        name: file.name,
-        status: 'success',
-        message: '页面布局设置完成'
+      try {
+        if (!file.file) {
+          processResults.value[i] = {
+            name: file.name,
+            status: 'error',
+            message: '文件无效'
+          }
+          continue
+        }
+        const arrayBuffer = await file.file.arrayBuffer()
+        await processDocxLayout(arrayBuffer)
+        processResults.value[i] = {
+          name: file.name,
+          status: 'success',
+          message: '页面布局设置完成'
+        }
+      } catch (e) {
+        processResults.value[i] = {
+          name: file.name,
+          status: 'error',
+          message: '处理失败: ' + (e as Error).message
+        }
       }
     }
 
@@ -368,74 +245,23 @@ const handleProcess = async () => {
 // 下载处理后的文档
 const handleDownload = async (index: number) => {
   const file = fileList.value[index]
-  if (!file) return
+  if (!file?.file) return
 
-  const paperSize = getPaperSize(pageSettings.value.paperSize)
-  const isLandscape = pageSettings.value.orientation === 'landscape'
-
-  const doc = new Document({
-    sections: [{
-      properties: {
-        page: {
-          margin: {
-            top: convertInchesToTwip(pageSettings.value.marginTop),
-            bottom: convertInchesToTwip(pageSettings.value.marginBottom),
-            left: convertInchesToTwip(pageSettings.value.marginLeft),
-            right: convertInchesToTwip(pageSettings.value.marginRight)
-          },
-          size: {
-            width: isLandscape ? paperSize.height : paperSize.width,
-            height: isLandscape ? paperSize.width : paperSize.height,
-            orientation: isLandscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT
-          }
-        }
-      },
-      headers: pageSettings.value.headerText ? {
-        default: new Header({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: pageSettings.value.headerText
-                })
-              ]
-            })
-          ]
-        })
-      } : undefined,
-      footers: pageSettings.value.footerText ? {
-        default: new Footer({
-          children: [
-            new Paragraph({
-              alignment: 'center',
-              children: [
-                new TextRun({
-                  text: pageSettings.value.footerText
-                })
-              ]
-            })
-          ]
-        })
-      } : undefined,
-      children: [
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: '页面布局设置后的文档'
-            })
-          ]
-        })
-      ]
-    }]
-  })
-
-  const blob = await Packer.toBlob(doc)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `layout_${file.name}`
-  a.click()
-  URL.revokeObjectURL(url)
+  try {
+    const arrayBuffer = await file.file.arrayBuffer()
+    const processed = await processDocxLayout(arrayBuffer)
+    const blob = new Blob([processed], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `layout_${file.name}`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    notification.error({ title: '下载失败', content: (e as Error).message })
+  }
 }
 
 // 批量下载

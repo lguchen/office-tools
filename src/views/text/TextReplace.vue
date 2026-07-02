@@ -85,7 +85,7 @@ const handleSwap = () => {
                 clearable
               />
               <NButton quaternary @click="handleSwap">
-                <NIcon><SwapOutline /></NIcon>
+                <NIcon><SwapHorizontalOutline /></NIcon>
               </NButton>
             </div>
           </NFormItem>

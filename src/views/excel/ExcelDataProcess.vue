@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NCheckbox, NCheckboxGroup, NTag } from 'naive-ui'
 import { TrashOutline, DownloadOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
@@ -10,11 +11,9 @@ import { useNotification } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
 import * as XLSX from 'xlsx'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const fileName = ref('')
 const fileData = ref<any[][]>([])

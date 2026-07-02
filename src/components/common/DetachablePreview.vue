@@ -2,7 +2,7 @@
 import { ref, watch, onUnmounted, computed, onBeforeUnmount } from 'vue'
 import { NButton, NIcon } from 'naive-ui'
 import { ExpandOutline, ContractOutline } from '@vicons/ionicons5'
-import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   title?: string
@@ -18,8 +18,7 @@ const emit = defineEmits<{
   (e: 'update:detached', v: boolean): void
 }>()
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const isDetached = ref(props.detached)
 let popupWindow: Window | null = null

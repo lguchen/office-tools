@@ -1,14 +1,13 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NSelect, NRadioGroup, NRadio, NInput, NButton, NIcon, NCard, NSpace, NInputGroup, NInputGroupLabel } from 'naive-ui'
 import { CopyOutline, RefreshOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import { useNotification } from 'naive-ui'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 公式类型定义
 interface FormulaType {

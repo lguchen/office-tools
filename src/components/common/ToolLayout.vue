@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   title: string
@@ -14,8 +13,7 @@ withDefaults(defineProps<Props>(), {
   showOutput: true
 })
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 </script>
 
 <template>

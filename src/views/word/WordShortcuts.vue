@@ -1,14 +1,13 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NInput, NCard, NTag, NButton, NIcon, NMenu, NScrollbar } from 'naive-ui'
 import { SearchOutline, CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
 import { wordShortcuts, wordShortcutCategories } from '../../data/wordShortcuts'
 import { useNotification } from 'naive-ui'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 搜索关键词
 const searchQuery = ref('')

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, h } from 'vue'
+import { ref, h, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NMenu, NIcon, NButton } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
@@ -17,14 +17,12 @@ import {
   ChevronForwardOutline,
   GridOutline
 } from '@vicons/ionicons5'
-import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 const router = useRouter()
 const route = useRoute()
-const settingsStore = useSettingsStore()
 const collapsed = ref(false)
-
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const menuOptions: MenuOption[] = [
   {

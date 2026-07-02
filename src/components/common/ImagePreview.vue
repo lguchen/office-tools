@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { NIcon, NButton, NSlider } from 'naive-ui'
 import { AddOutline, RemoveOutline, ExpandOutline, ContractOutline, RefreshOutline } from '@vicons/ionicons5'
-import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   src?: string
@@ -20,8 +20,7 @@ const props = withDefaults(defineProps<Props>(), {
   minHeight: 200
 })
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 缩放和位置状态
 const scale = ref(1)

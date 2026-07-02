@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { NIcon, NText } from 'naive-ui'
 import { CloudUploadOutline, DocumentOutline, ImageOutline, FileTrayOutline } from '@vicons/ionicons5'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   accept?: string
@@ -24,8 +24,7 @@ const emit = defineEmits<{
   (e: 'files-selected', files: { name: string; path: string; size?: number; file?: File }[]): void
 }>()
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const files = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
 const isDragging = ref(false)
@@ -56,8 +55,8 @@ const readFileFromPath = async (path: string): Promise<{ name: string; path: str
   let size: number | undefined
 
   try {
-    const { readBinaryFile } = await import('@tauri-apps/plugin-fs')
-    const data = await readBinaryFile(path)
+    const { readFile } = await import('@tauri-apps/plugin-fs')
+    const data = await readFile(path)
     size = data.byteLength
     const ext = name.split('.').pop()?.toLowerCase() || ''
     const mimeMap: Record<string, string> = {

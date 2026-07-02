@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NIcon, NButton } from 'naive-ui'
 import {
@@ -13,12 +13,11 @@ import {
   GridOutline,
   CloudUploadOutline
 } from '@vicons/ionicons5'
-import { useSettingsStore } from '../stores/settings'
+import { useTheme } from '../composables/useTheme'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 const router = useRouter()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const isDragging = ref(false)
 const unlistenDragEnter = ref<UnlistenFn | null>(null)
@@ -51,8 +50,8 @@ const handleFileDrop = async (paths: string[]) => {
   if (route) {
     const fileName = firstPath.split(/[\\/]/).pop() || firstPath
     try {
-      const { readBinaryFile } = await import('@tauri-apps/plugin-fs')
-      const data = await readBinaryFile(firstPath)
+      const { readFile } = await import('@tauri-apps/plugin-fs')
+      const data = await readFile(firstPath)
       const ext = fileName.split('.').pop()?.toLowerCase() || ''
       const mimeMap: Record<string, string> = {
         docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

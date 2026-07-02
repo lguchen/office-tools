@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { NSpace, NButton, NIcon } from 'naive-ui'
 import { CopyOutline, CloudDownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   showCopy?: boolean
@@ -22,8 +21,7 @@ withDefaults(defineProps<Props>(), {
   downloadDisabled: false
 })
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const emit = defineEmits<{
   (e: 'copy'): void

@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NIcon,
@@ -17,12 +18,10 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useSettingsStore } from '../../stores/settings'
 import * as XLSX from 'xlsx'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const uploadedFiles = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
 const currentFileIndex = ref(0)

@@ -2,8 +2,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { NIcon, NButton, NSpin, NSelect } from 'naive-ui'
 import { AddOutline, RemoveOutline, GridOutline } from '@vicons/ionicons5'
-import { useSettingsStore } from '../../stores/settings'
-import { computed } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import * as XLSX from 'xlsx'
 
 interface Props {
@@ -26,8 +25,7 @@ const emit = defineEmits<{
   (e: 'error', err: Error): void
 }>()
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(false)
@@ -92,8 +90,16 @@ const loadSpreadsheet = async () => {
 const renderSheet = async (workbook: XLSX.WorkBook, sheetName: string) => {
   if (!containerRef.value) return
 
+  // 设置 5 秒超时，超时后降级为 HTML 表格
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Spreadsheet load timeout')), 5000)
+  })
+
   try {
-    const Spreadsheet = (await import('x-data-spreadsheet')).default
+    const Spreadsheet = (await Promise.race([
+      import('x-data-spreadsheet'),
+      timeoutPromise
+    ])).default
     await import('x-data-spreadsheet/dist/locale/zh-cn')
 
     if (spreadsheetInstance) {
@@ -148,7 +154,7 @@ const renderSheet = async (workbook: XLSX.WorkBook, sheetName: string) => {
 
     applyZoom()
   } catch (e) {
-    console.error('Failed to render spreadsheet:', e)
+    console.error('Failed to render spreadsheet, using fallback:', e)
     if (containerRef.value) {
       containerRef.value.innerHTML = renderTableFallback(workbook, sheetName)
     }
@@ -159,21 +165,41 @@ const renderTableFallback = (workbook: XLSX.WorkBook, sheetName: string) => {
   const ws = workbook.Sheets[sheetName]
   const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
 
-  let html = `<table style="border-collapse:collapse;width:100%;font-size:12px;">`
-  for (let i = 0; i < Math.min(data.length, 100); i++) {
-    html += '<tr>'
-    for (let j = 0; j < Math.min(data[i]?.length || 0, 50); j++) {
-      const borderColor = isDark.value ? '#374151' : '#e5e7eb'
-      const bgColor = i === 0 ? (isDark.value ? '#1f2937' : '#f3f4f6') : 'transparent'
-      const textColor = isDark.value ? '#d1d5db' : '#374151'
-      html += `<td style="border:1px solid ${borderColor};padding:4px 8px;background:${bgColor};color:${textColor};white-space:nowrap;">${data[i][j] ?? ''}</td>`
+  const borderColor = isDark.value ? '#374151' : '#e5e7eb'
+  const headerBg = isDark.value ? '#1f2937' : '#f3f4f6'
+  const textColor = isDark.value ? '#d1d5db' : '#374151'
+  const rowBg = isDark.value ? '#111827' : '#ffffff'
+  const maxRows = Math.min(data.length, 200)
+  const maxCols = Math.min(Math.max(...data.map(r => r.length), 0), 50)
+
+  let html = `<div style="overflow:auto;max-height:100%;width:100%;">`
+  html += `<table style="border-collapse:collapse;width:100%;font-size:12px;">`
+
+  // 表头
+  if (maxRows > 0) {
+    html += `<thead style="position:sticky;top:0;z-index:1;">`
+    html += `<tr style="background:${headerBg};">`
+    for (let j = 0; j < maxCols; j++) {
+      html += `<th style="border:1px solid ${borderColor};padding:6px 10px;text-align:left;color:${textColor};white-space:nowrap;font-weight:600;">${data[0]?.[j] ?? ''}</th>`
+    }
+    html += '</tr></thead>'
+  }
+
+  // 数据行
+  html += `<tbody>`
+  for (let i = 1; i < maxRows; i++) {
+    html += `<tr style="background:${rowBg};">`
+    for (let j = 0; j < maxCols; j++) {
+      html += `<td style="border:1px solid ${borderColor};padding:4px 10px;color:${textColor};white-space:nowrap;">${data[i]?.[j] ?? ''}</td>`
     }
     html += '</tr>'
   }
-  html += '</table>'
-  if (data.length > 100) {
-    html += `<div style="padding:8px;color:${isDark.value ? '#9ca3af' : '#6b7280'};font-size:12px;">仅显示前100行，共${data.length}行</div>`
+  html += '</tbody></table>'
+
+  if (data.length > 200) {
+    html += `<div style="padding:8px;color:${isDark.value ? '#9ca3af' : '#6b7280'};font-size:12px;">仅显示前200行，共${data.length}行</div>`
   }
+  html += '</div>'
   return html
 }
 

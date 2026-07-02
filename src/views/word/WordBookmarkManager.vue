@@ -1,13 +1,11 @@
-<!--
+﻿<!--
   Word书签管理页面
-  技术说明：使用docx库处理Word文档
-  安装：npm install docx
-  文档：https://docx.js.org/
-
-  注意：docx库对书签的支持有限，本页面提供基础的书签管理功能演示
+  技术说明：使用 JSZip 解析原始 .docx，通过 useDocxEdit 组合式函数操作 document.xml
+  支持解析真实书签、删除、重命名、添加书签
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick, h } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NInput,
@@ -24,14 +22,6 @@ import {
   useNotification
 } from 'naive-ui'
 import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  BookmarkStart,
-  BookmarkEnd
-} from 'docx'
-import {
   DocumentOutline,
   TrashOutline,
   AddOutline,
@@ -43,14 +33,21 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useSettingsStore } from '../../stores/settings'
+import {
+  loadDocx,
+  getDocumentXml,
+  saveDocx,
+  parseBookmarks,
+  removeBookmark,
+  renameBookmark
+} from '../../composables/useDocxEdit'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const uploadedFile = ref<{ name: string; path: string; size?: number; file?: File } | null>(null)
-const existingBookmarks = ref<Array<{ name: string; position: string }>>([])
+const existingBookmarks = ref<Array<{ name: string; position: string; id: string; originalName: string }>>([])
+const originalParsedBookmarks = ref<Array<{ name: string; id: string }>>([])
 const newBookmarkName = ref('')
 const bookmarksToAdd = ref<Array<{ name: string; text: string }>>([])
 const isProcessing = ref(false)
@@ -77,14 +74,23 @@ const bookmarkColumns = [
     title: '操作',
     key: 'actions',
     render: (row: { name: string }) => {
-      return h(NPopconfirm, {
-        onPositiveClick: () => handleDeleteBookmark(row.name)
-      }, {
-        trigger: () => h(NButton, { size: 'small', quaternary: true }, {
-          icon: () => h(NIcon, null, { default: () => h(TrashOutline) })
+      return h('div', { style: 'display: flex; gap: 4px;' }, [
+        h(NButton, {
+          size: 'small',
+          quaternary: true,
+          onClick: () => handleRenameBookmark(row.name)
+        }, {
+          icon: () => h(NIcon, null, { default: () => h(CreateOutline) })
         }),
-        default: () => '确定删除此书签吗？'
-      })
+        h(NPopconfirm, {
+          onPositiveClick: () => handleDeleteBookmark(row.name)
+        }, {
+          trigger: () => h(NButton, { size: 'small', quaternary: true }, {
+            icon: () => h(NIcon, null, { default: () => h(TrashOutline) })
+          }),
+          default: () => '确定删除此书签吗？'
+        })
+      ])
     }
   }
 ]
@@ -111,86 +117,95 @@ watch([existingBookmarks, bookmarksToAdd], () => {
 const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
   if (files.length > 0) {
     uploadedFile.value = files[0]
-    existingBookmarks.value = [
-      { name: '第一章', position: '文档开头' },
-      { name: '第二章', position: '中间位置' }
-    ]
     if (files[0].file) {
       originalBuffer.value = await files[0].file.arrayBuffer()
       processedBuffer.value = null
-      if (realtimePreview.value) {
-        debounceProcess()
+      // 解析真实书签
+      try {
+        const zip = await loadDocx(originalBuffer.value)
+        const documentXml = await getDocumentXml(zip)
+        const bookmarks = parseBookmarks(documentXml)
+        originalParsedBookmarks.value = bookmarks
+        existingBookmarks.value = bookmarks.map(b => ({
+          name: b.name,
+          position: `ID: ${b.id}`,
+          id: b.id,
+          originalName: b.name
+        }))
+        if (realtimePreview.value) {
+          debounceProcess()
+        }
+        notification.success({
+          title: '文件已上传',
+          content: `已读取文档书签信息，共 ${bookmarks.length} 个书签`
+        })
+      } catch (error) {
+        notification.error({
+          title: '解析失败',
+          content: (error as Error).message
+        })
       }
     }
-    notification.success({ title: '文件已上传', content: '已读取文档书签信息' })
   }
 }
 
+/**
+ * 将新书签插入到 document.xml 的 body 末尾
+ */
+function addBookmarkToXml(documentXml: string, bookmarkName: string, bookmarkId: number, text: string): string {
+  const escapedName = bookmarkName.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const startTag = `<w:bookmarkStart w:id="${bookmarkId}" w:name="${escapedName}"/>`
+  const endTag = `<w:bookmarkEnd w:id="${bookmarkId}"/>`
+  const paragraph = `<w:p><w:r><w:t xml:space="preserve">${escapedText}</w:t></w:r></w:p>`
+  const bookmarkXml = `${startTag}${paragraph}${endTag}`
+  if (documentXml.includes('</w:body>')) {
+    return documentXml.replace('</w:body>', `${bookmarkXml}</w:body>`)
+  }
+  return documentXml + bookmarkXml
+}
+
+/**
+ * 处理原始文档：删除/重命名/添加书签，返回新的 ArrayBuffer
+ */
+const processDocumentXml = async (): Promise<ArrayBuffer> => {
+  if (!originalBuffer.value) throw new Error('无原始文档')
+
+  const zip = await loadDocx(originalBuffer.value)
+  let documentXml = await getDocumentXml(zip)
+
+  // 删除被移除的书签（在原始书签中但不在当前列表中）
+  const existingIds = new Set(existingBookmarks.value.map(b => b.id))
+  const deletedBookmarks = originalParsedBookmarks.value.filter(b => !existingIds.has(b.id))
+  for (const bookmark of deletedBookmarks) {
+    documentXml = removeBookmark(documentXml, bookmark.name)
+  }
+
+  // 重命名书签（名称发生变化的书签）
+  for (const bookmark of existingBookmarks.value) {
+    if (bookmark.name !== bookmark.originalName) {
+      documentXml = renameBookmark(documentXml, bookmark.originalName, bookmark.name)
+    }
+  }
+
+  // 添加新书签
+  const maxId = originalParsedBookmarks.value.reduce((max, b) => {
+    const id = parseInt(b.id, 10)
+    return id > max ? id : max
+  }, 100)
+  bookmarksToAdd.value.forEach((bookmark, index) => {
+    documentXml = addBookmarkToXml(documentXml, bookmark.name, maxId + index + 1, bookmark.text)
+  })
+
+  return await saveDocx(zip, documentXml)
+}
+
 const doProcess = async (showNotification: boolean) => {
-  if (!uploadedFile.value) return
+  if (!uploadedFile.value || !originalBuffer.value) return
 
   try {
     isProcessing.value = true
-
-    const bookmarkId = 100
-    const children: (Paragraph | BookmarkStart | BookmarkEnd)[] = []
-
-    existingBookmarks.value.forEach((bookmark, index) => {
-      children.push(
-        new BookmarkStart({
-          id: bookmarkId + index,
-          name: bookmark.name
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `书签 "${bookmark.name}" 的内容`
-            })
-          ]
-        }),
-        new BookmarkEnd({
-          id: bookmarkId + index
-        })
-      )
-    })
-
-    bookmarksToAdd.value.forEach((bookmark, index) => {
-      const id = bookmarkId + existingBookmarks.value.length + index
-      children.push(
-        new BookmarkStart({
-          id: id,
-          name: bookmark.name
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: bookmark.text
-            })
-          ]
-        }),
-        new BookmarkEnd({
-          id: id
-        })
-      )
-    })
-
-    const doc = new Document({
-      sections: [{
-        properties: {},
-        children: children.length > 0 ? children : [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: '本文档包含书签管理功能演示'
-              })
-            ]
-          })
-        ]
-      }]
-    })
-
-    const blob = await Packer.toBlob(doc)
-    processedBuffer.value = await blob.arrayBuffer()
+    processedBuffer.value = await processDocumentXml()
 
     await nextTick()
     if (isDetached.value && detachableRef.value) {
@@ -198,7 +213,7 @@ const doProcess = async (showNotification: boolean) => {
     }
 
     if (showNotification) {
-      notification.success({ title: '处理成功', content: '带书签的文档已生成' })
+      notification.success({ title: '处理成功', content: '文档书签已更新' })
     }
   } catch (error) {
     console.error('Process error:', error)
@@ -238,6 +253,26 @@ const handleDeleteBookmark = (name: string) => {
   }
 }
 
+const handleRenameBookmark = (oldName: string) => {
+  const newName = window.prompt('请输入新的书签名称', oldName)
+  if (!newName || newName === oldName) return
+
+  const allNames = [
+    ...existingBookmarks.value.map(b => b.name),
+    ...bookmarksToAdd.value.map(b => b.name)
+  ]
+  if (allNames.includes(newName)) {
+    notification.warning({ title: '提示', content: '书签名称已存在' })
+    return
+  }
+
+  const index = existingBookmarks.value.findIndex(b => b.name === oldName)
+  if (index !== -1) {
+    existingBookmarks.value[index].name = newName
+    notification.success({ title: '已重命名', content: `书签 "${oldName}" 已重命名为 "${newName}"` })
+  }
+}
+
 const removeFromToAddList = (index: number) => {
   bookmarksToAdd.value.splice(index, 1)
 }
@@ -251,65 +286,10 @@ const handleExport = async () => {
   isProcessing.value = true
 
   try {
-    const bookmarkId = 100
-    const children: (Paragraph | BookmarkStart | BookmarkEnd)[] = []
-
-    existingBookmarks.value.forEach((bookmark, index) => {
-      children.push(
-        new BookmarkStart({
-          id: bookmarkId + index,
-          name: bookmark.name
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `书签 "${bookmark.name}" 的内容`
-            })
-          ]
-        }),
-        new BookmarkEnd({
-          id: bookmarkId + index
-        })
-      )
+    processedBuffer.value = await processDocumentXml()
+    const blob = new Blob([processedBuffer.value], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     })
-
-    bookmarksToAdd.value.forEach((bookmark, index) => {
-      const id = bookmarkId + existingBookmarks.value.length + index
-      children.push(
-        new BookmarkStart({
-          id: id,
-          name: bookmark.name
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: bookmark.text
-            })
-          ]
-        }),
-        new BookmarkEnd({
-          id: id
-        })
-      )
-    })
-
-    const doc = new Document({
-      sections: [{
-        properties: {},
-        children: children.length > 0 ? children : [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: '本文档包含书签管理功能演示'
-              })
-            ]
-          })
-        ]
-      }]
-    })
-
-    const blob = await Packer.toBlob(doc)
-    processedBuffer.value = await blob.arrayBuffer()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -322,7 +302,7 @@ const handleExport = async () => {
       detachableRef.value.syncContent()
     }
 
-    notification.success({ title: '导出成功', content: '带书签的文档已生成' })
+    notification.success({ title: '导出成功', content: '文档书签已更新并导出' })
   } catch (error) {
     notification.error({ title: '导出失败', content: (error as Error).message })
   } finally {
@@ -347,6 +327,7 @@ const handleDownload = async () => {
 const handleClear = () => {
   uploadedFile.value = null
   existingBookmarks.value = []
+  originalParsedBookmarks.value = []
   bookmarksToAdd.value = []
   newBookmarkName.value = ''
   originalBuffer.value = null

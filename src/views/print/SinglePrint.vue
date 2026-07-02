@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton, NIcon, NFormItem, NForm, NSelect,
   NInputNumber, NRadioGroup, NRadioButton, NCard, NDivider, NSpin,
@@ -15,11 +16,9 @@ import {
 import PrintPreview from '../../components/print/PrintPreview.vue'
 import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 interface PrintFile {
   id: string
@@ -202,28 +201,59 @@ const handleDrop = (e: DragEvent) => {
   }
 }
 
-let unlistenFileDrop: (() => void) | null = null
+let unlistenDragEnter: (() => void) | null = null
+let unlistenDragLeave: (() => void) | null = null
+let unlistenDragDrop: (() => void) | null = null
+let dragEnterCount = 0
+
+const injectPreviewColors = () => {
+  const root = document.documentElement
+  if (isDark.value) {
+    root.style.setProperty('--preview-wrapper-bg', '#1f2937')
+    root.style.setProperty('--preview-wrapper-shadow', '0 4px 20px rgba(0, 0, 0, 0.5)')
+    root.style.setProperty('--preview-wrapper-text', '#e5e7eb')
+  } else {
+    root.style.setProperty('--preview-wrapper-bg', '#ffffff')
+    root.style.setProperty('--preview-wrapper-shadow', '0 4px 20px rgba(0, 0, 0, 0.15)')
+    root.style.setProperty('--preview-wrapper-text', '#1f2328')
+  }
+}
 
 const setupTauriDragDrop = async () => {
   try {
     const { listen } = await import('@tauri-apps/api/event')
-    unlistenFileDrop = await listen('tauri://file-drop', (event: any) => {
-      const filePaths = event.payload as string[]
+
+    unlistenDragEnter = await listen('tauri://drag-enter', () => {
+      dragEnterCount++
+      isDragOver.value = true
+    })
+
+    unlistenDragLeave = await listen('tauri://drag-leave', () => {
+      dragEnterCount = Math.max(0, dragEnterCount - 1)
+      if (dragEnterCount === 0) {
+        isDragOver.value = false
+      }
+    })
+
+    unlistenDragDrop = await listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
+      dragEnterCount = 0
+      isDragOver.value = false
+      const filePaths = event.payload.paths
       if (filePaths && filePaths.length > 0) {
         loadFilesFromPaths(filePaths)
       }
     })
   } catch (e) {
-    console.log('Tauri file drop not available:', e)
+    console.log('Tauri drag drop not available:', e)
   }
 }
 
 const loadFilesFromPaths = async (paths: string[]) => {
   try {
-    const { readBinaryFile } = await import('@tauri-apps/plugin-fs')
+    const { readFile } = await import('@tauri-apps/plugin-fs')
     for (const path of paths) {
       try {
-        const data = await readBinaryFile(path)
+        const data = await readFile(path)
         const fileName = path.split(/[\\/]/).pop() || 'unknown'
         const file = new File([data], fileName)
         addFiles([file])
@@ -555,16 +585,19 @@ const applyMarginPreset = () => {
 
 watch(marginPreset, applyMarginPreset)
 
+watch(isDark, injectPreviewColors, { immediate: true })
+
 onMounted(() => {
+  injectPreviewColors()
   loadPrinters()
   scanNetworkPrinters()
   setupTauriDragDrop()
 })
 
 onUnmounted(() => {
-  if (unlistenFileDrop) {
-    unlistenFileDrop()
-  }
+  if (unlistenDragEnter) unlistenDragEnter()
+  if (unlistenDragLeave) unlistenDragLeave()
+  if (unlistenDragDrop) unlistenDragDrop()
 })
 </script>
 
@@ -1313,11 +1346,11 @@ onUnmounted(() => {
 .print-preview-wrapper {
   width: 210mm;
   max-width: 100%;
-  background: white;
+  background: var(--preview-wrapper-bg);
   min-height: 297mm;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  color: #1f2328;
+  box-shadow: var(--preview-wrapper-shadow);
+  color: var(--preview-wrapper-text);
 }
 
 .print-preview-wrapper.landscape {

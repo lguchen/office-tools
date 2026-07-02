@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NTag } from 'naive-ui'
 import {
   PrintOutline,
@@ -10,11 +11,9 @@ import {
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import { useNotification } from 'naive-ui'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = ref(settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 interface PrintJob {
   id: string

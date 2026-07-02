@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Word文档合并页面
   技术说明：使用docx库处理Word文档
   安装：npm install docx
@@ -8,6 +8,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NCard,
@@ -31,6 +32,7 @@ import {
   PageBreak,
   SectionType
 } from 'docx'
+import { extractText } from '../../composables/useDocxEdit'
 import {
   DocumentOutline,
   CreateOutline,
@@ -41,11 +43,9 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 上传的文件列表
 const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
@@ -121,25 +121,22 @@ const handleMerge = async () => {
         allParagraphs.push(titleParagraph)
       }
 
-      // 添加模拟文档内容
-      allParagraphs.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `来自文档 "${file.name}" 的内容`,
-              size: 24
+      // 读取真实文档内容
+      const arrayBuffer = await file.file!.arrayBuffer()
+      const textContent = await extractText(arrayBuffer)
+      const lines = textContent.split('\n').filter(line => line.trim())
+
+      if (lines.length === 0) {
+        allParagraphs.push(new Paragraph({ children: [new TextRun({ text: '', size: 24 })] }))
+      } else {
+        for (const line of lines) {
+          allParagraphs.push(
+            new Paragraph({
+              children: [new TextRun({ text: line, size: 24 })]
             })
-          ]
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: '这是合并后的文档内容演示。',
-              size: 24
-            })
-          ]
-        })
-      )
+          )
+        }
+      }
 
       // 添加分隔符（最后一个文档不添加）
       if (i < validFiles.length - 1) {

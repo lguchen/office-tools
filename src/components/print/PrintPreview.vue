@@ -4,6 +4,7 @@ import { NSpin, NIcon, NEmpty, NTabs, NTabPane, NTag, NButton } from 'naive-ui'
 import { DocumentTextOutline, ImageOutline, DocumentOutline, GridOutline, Document, CloseOutline } from '@vicons/ionicons5'
 import * as XLSX from 'xlsx'
 import mammoth from 'mammoth'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   file?: File | null
@@ -18,6 +19,8 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'selection-change', data: SelectionData | null): void
 }>()
+
+const { isDark } = useTheme()
 
 interface SelectionData {
   type: 'excel' | 'word' | 'text' | 'image'
@@ -88,7 +91,7 @@ const getSelectionData = (): SelectionData | null => {
       const ws = XLSX.utils.aoa_to_sheet(selectedData)
       const html = XLSX.utils.sheet_to_html(ws, {
         id: 'excel-selected',
-        header: '<style>table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;white-space:nowrap;}th{background-color:#f6f8fa;font-weight:600;}</style>'
+        header: `<style>${getExcelHeaderStyle()}</style>`
       })
       
       return {
@@ -110,6 +113,46 @@ const getSelectionData = (): SelectionData | null => {
     }
   }
   return null
+}
+
+const getExcelHeaderStyle = (): string => {
+  const base = 'table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;white-space:nowrap;}'
+  if (isDark.value) {
+    return base + 'th{background-color:#1f2937;color:#e5e7eb;font-weight:600;}td{color:#d1d5db;}tr:nth-child(even){background-color:#111827;}'
+  }
+  return base + 'th{background-color:#f6f8fa;font-weight:600;}tr:nth-child(even){background-color:#fafbfc;}'
+}
+
+const injectWordColors = () => {
+  const root = document.documentElement
+  if (isDark.value) {
+    root.style.setProperty('--word-text-color', '#e5e7eb')
+    root.style.setProperty('--word-border-color', '#4b5563')
+    root.style.setProperty('--word-header-bg', '#1f2937')
+    root.style.setProperty('--word-row-bg', '#111827')
+    root.style.setProperty('--word-muted-text', '#9ca3af')
+    root.style.setProperty('--word-code-bg', '#1f2937')
+    root.style.setProperty('--word-link-color', '#60a5fa')
+  } else {
+    root.style.setProperty('--word-text-color', '#1f2328')
+    root.style.setProperty('--word-border-color', '#d0d7de')
+    root.style.setProperty('--word-header-bg', '#f6f8fa')
+    root.style.setProperty('--word-row-bg', '#f6f8fa')
+    root.style.setProperty('--word-muted-text', '#57606a')
+    root.style.setProperty('--word-code-bg', '#f6f8fa')
+    root.style.setProperty('--word-link-color', '#0969da')
+  }
+}
+
+const injectExcelColors = () => {
+  const root = document.documentElement
+  if (isDark.value) {
+    root.style.setProperty('--excel-highlight-bg', '#1e3a5f')
+    root.style.setProperty('--excel-highlight-border', '#60a5fa')
+  } else {
+    root.style.setProperty('--excel-highlight-bg', '#e6f4ff')
+    root.style.setProperty('--excel-highlight-border', '#1677ff')
+  }
 }
 
 defineExpose({
@@ -305,7 +348,7 @@ const loadExcel = async (file: File) => {
     const html = XLSX.utils.sheet_to_html(worksheet, {
       id: 'excel-table',
       editable: false,
-      header: '<style>table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;white-space:nowrap;}th{background-color:#f6f8fa;font-weight:600;position:sticky;top:0;z-index:1;}tr:nth-child(even){background-color:#fafbfc;}</style>'
+      header: `<style>${getExcelHeaderStyle()}</style>`
     })
     const data = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' })
     sheets.push({ name: sheetName, html, data })
@@ -384,6 +427,14 @@ watch(activeSheet, async () => {
   }
 })
 
+watch(isDark, () => {
+  injectWordColors()
+  injectExcelColors()
+  if (previewType.value === 'excel') {
+    loadExcel(props.file!)
+  }
+}, { immediate: true })
+
 onBeforeUnmount(() => {
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
   if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value)
@@ -414,7 +465,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="flex-1 min-h-0 border rounded-lg overflow-hidden bg-white">
+    <div class="flex-1 min-h-0 border rounded-lg overflow-hidden"
+         :class="isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'">
       <NSpin v-if="loading" class="h-full flex items-center justify-center">
         <div class="opacity-60">加载预览中...</div>
       </NSpin>
@@ -454,7 +506,9 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else-if="previewType === 'word'" class="h-full overflow-auto">
-        <div class="word-container p-6 max-w-4xl mx-auto" v-html="wordHtml"></div>
+        <div class="word-container p-6 max-w-4xl mx-auto"
+             :class="isDark ? 'text-gray-200' : 'text-gray-800'"
+             v-html="wordHtml"></div>
       </div>
 
       <div v-else-if="previewType === 'unsupported'" class="h-full flex items-center justify-center">
@@ -470,7 +524,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.word-container) {
-  color: #1f2328;
+  color: var(--word-text-color);
   line-height: 1.6;
   user-select: text;
 }
@@ -480,7 +534,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   margin: 0.67em 0;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid #d0d7de;
+  border-bottom: 1px solid var(--word-border-color);
 }
 
 :deep(.word-container h2) {
@@ -488,7 +542,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   margin: 0.83em 0;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid #d0d7de;
+  border-bottom: 1px solid var(--word-border-color);
 }
 
 :deep(.word-container h3) {
@@ -525,23 +579,23 @@ onBeforeUnmount(() => {
 
 :deep(.word-container th),
 :deep(.word-container td) {
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--word-border-color);
   padding: 6px 13px;
 }
 
 :deep(.word-container th) {
-  background-color: #f6f8fa;
+  background-color: var(--word-header-bg);
   font-weight: 600;
 }
 
 :deep(.word-container tr:nth-child(2n)) {
-  background-color: #f6f8fa;
+  background-color: var(--word-row-bg);
 }
 
 :deep(.word-container blockquote) {
   padding: 0 1em;
-  color: #57606a;
-  border-left: 0.25em solid #d0d7de;
+  color: var(--word-muted-text);
+  border-left: 0.25em solid var(--word-border-color);
   margin: 1em 0;
 }
 
@@ -549,7 +603,7 @@ onBeforeUnmount(() => {
   padding: 0.2em 0.4em;
   margin: 0;
   font-size: 85%;
-  background-color: #f6f8fa;
+  background-color: var(--word-code-bg);
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
@@ -559,7 +613,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   font-size: 85%;
   line-height: 1.45;
-  background-color: #f6f8fa;
+  background-color: var(--word-code-bg);
   border-radius: 6px;
   margin: 1em 0;
 }
@@ -576,7 +630,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.word-container a) {
-  color: #0969da;
+  color: var(--word-link-color);
   text-decoration: none;
 }
 
@@ -588,7 +642,7 @@ onBeforeUnmount(() => {
   height: 0.25em;
   padding: 0;
   margin: 24px 0;
-  background-color: #d0d7de;
+  background-color: var(--word-border-color);
   border: 0;
 }
 
@@ -608,8 +662,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.excel-container .excel-selected-cell) {
-  background-color: #e6f4ff !important;
-  outline: 1px solid #1677ff;
+  background-color: var(--excel-highlight-bg) !important;
+  outline: 1px solid var(--excel-highlight-border);
   outline-offset: -1px;
 }
 </style>

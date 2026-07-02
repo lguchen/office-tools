@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NInput, NButton, NIcon, NSpace } from 'naive-ui'
 import { SearchOutline, SunnyOutline, MoonOutline } from '@vicons/ionicons5'
 import { useSettingsStore } from '../../stores/settings'
+import { useTheme } from '../../composables/useTheme'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
+const { isDark } = useTheme()
 
 const searchQuery = ref('')
 const searchResults = ref<Array<{ label: string; path: string }>>([])
-
-const isDark = computed(() => settingsStore.theme === 'dark')
 
 const tools = [
   { label: 'PDF合并', path: '/pdf/merge' },

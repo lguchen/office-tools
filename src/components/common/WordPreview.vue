@@ -2,8 +2,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { NIcon, NButton, NSlider, NSpin } from 'naive-ui'
 import { AddOutline, RemoveOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
-import { useSettingsStore } from '../../stores/settings'
-import { computed } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   file?: File | null
@@ -23,8 +22,7 @@ const emit = defineEmits<{
   (e: 'error', err: Error): void
 }>()
 
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const previewContainerRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(false)

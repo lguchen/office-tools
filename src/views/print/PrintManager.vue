@@ -1,5 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NTag } from 'naive-ui'
 import {
   PrintOutline,
@@ -9,11 +10,9 @@ import {
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import { useRouter } from 'vue-router'
-import { useSettingsStore } from '../../stores/settings'
 
 const router = useRouter()
-const settingsStore = useSettingsStore()
-const isDark = ref(settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 const stats = ref([
   { label: '今日打印', value: 0, icon: PrintOutline, color: 'text-blue-400' },

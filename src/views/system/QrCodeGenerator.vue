@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NInput, NButton, NIcon, NFormItem, NForm, NSelect, NSpace, NSlider } from 'naive-ui'
-import { CreateOutline, CloudDownloadOutline } from '@vicons/ionicons5'
+import { CreateOutline, CloudDownloadOutline, QrCodeOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import { useNotification } from 'naive-ui'

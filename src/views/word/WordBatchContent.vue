@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Word批量内容处理页面
   技术说明：使用docx库处理Word文档
   安装：npm install docx
@@ -10,6 +10,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NInput,
@@ -45,11 +46,9 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useSettingsStore } from '../../stores/settings'
 
 const notification = useNotification()
-const settingsStore = useSettingsStore()
-const isDark = computed(() => settingsStore.theme === 'dark')
+const { isDark } = useTheme()
 
 // 上传的文件列表
 const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])

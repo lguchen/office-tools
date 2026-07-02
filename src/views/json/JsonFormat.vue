@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { NInput, NButton, NIcon, NSelect, NFormItem, NForm, NSwitch } from 'naive-ui'
-import { CreateOutline } from '@vicons/ionicons5'
+import { CreateOutline, ColorFilterOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import { useNotification } from 'naive-ui'
