@@ -13,11 +13,9 @@ import {
   GridOutline,
   CloudUploadOutline
 } from '@vicons/ionicons5'
-import { useTheme } from '../composables/useTheme'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 const router = useRouter()
-const { isDark } = useTheme()
 
 const isDragging = ref(false)
 const unlistenDragEnter = ref<UnlistenFn | null>(null)
@@ -237,25 +235,23 @@ const navigateTo = (path: string) => {
 <template>
   <div class="home-view p-6 relative">
     <div v-if="isDragging" 
-         class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-         :class="isDark ? 'bg-blue-500/10' : 'bg-blue-500/5'">
-      <div class="px-12 py-10 rounded-2xl border-2 border-dashed text-center"
-           :class="isDark ? 'border-blue-400 bg-gray-900/90' : 'border-blue-400 bg-white/90'">
+         class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none bg-blue-500/5">
+      <div class="px-12 py-10 rounded-2xl border-2 border-dashed text-center border-blue-400 bg-white/90">
         <NIcon size="64" class="text-blue-500 mb-4">
           <CloudUploadOutline />
         </NIcon>
-        <div class="text-xl font-medium mb-2" :class="isDark ? 'text-gray-200' : 'text-gray-700'">
+        <div class="text-xl font-medium mb-2 text-gray-700">
           松开鼠标上传文件
         </div>
-        <div class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <div class="text-sm text-gray-500">
           系统将自动识别文件类型并跳转到对应工具
         </div>
       </div>
     </div>
 
     <div class="mb-8">
-      <h1 class="text-3xl font-bold mb-2" :class="isDark ? 'text-blue-400' : 'text-blue-600'">欢迎使用轻量化办公文档工具箱</h1>
-      <p :class="isDark ? 'text-gray-400' : 'text-gray-500'">完全离线、秒开即用，聚焦办公文档场景的高效工具集</p>
+      <h1 class="text-3xl font-bold mb-2 text-blue-600">欢迎使用轻量化办公文档工具箱</h1>
+      <p class="text-gray-500">完全离线、秒开即用，聚焦办公文档场景的高效工具集</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -266,20 +262,19 @@ const navigateTo = (path: string) => {
                 <NIcon :size="24" :class="category.color">
                   <component :is="category.icon" />
                 </NIcon>
-                <span class="font-bold" :class="isDark ? 'text-gray-200' : 'text-gray-800'">{{ category.name }}</span>
+                <span class="font-bold text-gray-800">{{ category.name }}</span>
               </div>
             </template>
             <div class="space-y-1">
               <div
                 v-for="tool in category.tools"
                 :key="tool.path"
-                class="flex items-center justify-between p-2 rounded cursor-pointer transition-colors"
-                :class="isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-100'"
+                class="flex items-center justify-between p-2 rounded cursor-pointer transition-colors hover:bg-gray-100"
                 @click="navigateTo(tool.path)"
               >
                 <div>
-                  <div class="font-medium text-sm" :class="isDark ? 'text-gray-300' : 'text-gray-700'">{{ tool.name }}</div>
-                  <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ tool.desc }}</div>
+                  <div class="font-medium text-sm text-gray-700">{{ tool.name }}</div>
+                  <div class="text-xs text-gray-400">{{ tool.desc }}</div>
                 </div>
                 <NButton size="tiny" quaternary>
                   打开

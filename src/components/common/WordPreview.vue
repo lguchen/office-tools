@@ -2,8 +2,6 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { NIcon, NButton, NSlider, NSpin } from 'naive-ui'
 import { AddOutline, RemoveOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
-import { useTheme } from '../../composables/useTheme'
-
 interface Props {
   file?: File | null
   arrayBuffer?: ArrayBuffer | null
@@ -21,8 +19,6 @@ const emit = defineEmits<{
   (e: 'loaded', data: { pageCount: number }): void
   (e: 'error', err: Error): void
 }>()
-
-const { isDark } = useTheme()
 
 const previewContainerRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(false)
@@ -100,7 +96,7 @@ const loadDocx = async () => {
     console.error('Failed to render docx:', e)
     emit('error', e as Error)
     if (previewContainerRef.value) {
-      previewContainerRef.value.innerHTML = `<div style="padding:20px;color:${isDark.value ? '#f87171' : '#dc2626'};text-align:center;">文档渲染失败，请确保是有效的.docx文件</div>`
+      previewContainerRef.value.innerHTML = `<div style="padding:20px;color:#dc2626;text-align:center;">文档渲染失败，请确保是有效的.docx文件</div>`
     }
   } finally {
     isLoading.value = false
@@ -155,9 +151,8 @@ defineExpose({
 </script>
 
 <template>
-  <div class="word-preview h-full flex flex-col" :class="isDark ? 'bg-gray-900' : 'bg-gray-100'">
-    <div class="flex items-center justify-between px-3 py-2 border-b flex-shrink-0"
-         :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'">
+  <div class="word-preview h-full flex flex-col bg-gray-100">
+    <div class="flex items-center justify-between px-3 py-2 border-b flex-shrink-0 border-gray-200 bg-white">
       <div class="flex items-center gap-2">
         <NButton size="small" text @click="zoomOut" :disabled="localZoom <= 0.3">
           <template #icon><NIcon><RemoveOutline /></NIcon></template>
@@ -168,14 +163,14 @@ defineExpose({
         <NButton size="small" text @click="zoomIn" :disabled="localZoom >= 3">
           <template #icon><NIcon><AddOutline /></NIcon></template>
         </NButton>
-        <span class="text-xs ml-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">{{ Math.round(localZoom * 100) }}%</span>
+        <span class="text-xs ml-1 text-gray-500">{{ Math.round(localZoom * 100) }}%</span>
       </div>
 
       <div class="flex items-center gap-1">
         <NButton size="small" text @click="goToPrevPage" :disabled="currentPage <= 1">
           <template #icon><NIcon><ChevronBackOutline /></NIcon></template>
         </NButton>
-        <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <span class="text-xs text-gray-500">
           {{ totalPages > 0 ? `${currentPage} / ${totalPages}` : '--' }}
         </span>
         <NButton size="small" text @click="goToNextPage" :disabled="currentPage >= totalPages">
@@ -185,13 +180,11 @@ defineExpose({
     </div>
 
     <div class="flex-1 min-h-0 overflow-auto relative">
-      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center z-10"
-           :class="isDark ? 'bg-gray-900/80' : 'bg-white/80'">
+      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center z-10 bg-white/80">
         <NSpin size="large" />
       </div>
-      <div ref="previewContainerRef" class="word-doc-container w-full h-full p-4 overflow-auto">
-        <div v-if="!file && !arrayBuffer" class="h-full flex items-center justify-center"
-             :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+      <div ref="previewContainerRef" class="word-doc-container w-full h-full p-4 overflow-auto flex justify-center">
+        <div v-if="!file && !arrayBuffer" class="h-full flex items-center justify-center text-gray-400">
           <div class="text-center text-sm">暂无文档，请上传.docx文件</div>
         </div>
       </div>
@@ -206,9 +199,13 @@ defineExpose({
 .word-doc-container :deep(.docx-wrapper) {
   margin: 0 auto;
   transition: transform 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .word-doc-container :deep(.docx-wrapper > section) {
   margin: 20px auto;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  float: none !important;
 }
 </style>

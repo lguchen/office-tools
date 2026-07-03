@@ -5,10 +5,8 @@ import { SearchOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 import { invoke } from '@tauri-apps/api/core'
-
-const notification = useNotification()
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -40,9 +38,9 @@ const handleScan = async () => {
     const data = Array.from(new Uint8Array(arrayBuffer))
     const result = await invoke<string>('scan_qrcode', { data })
     resultText.value = result
-    notification.success({ title: '扫描成功', content: '二维码已识别' })
+    notifySuccess('扫描成功', '二维码已识别')
   } catch (e) {
-    notification.error({ title: '扫描失败', content: (e as Error).message })
+    notifyError('扫描失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -52,9 +50,9 @@ const handleCopy = async () => {
   if (!resultText.value) return
   try {
     await navigator.clipboard.writeText(resultText.value)
-    notification.success({ title: '复制成功', content: '内容已复制到剪贴板' })
+    notifySuccess('复制成功', '内容已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

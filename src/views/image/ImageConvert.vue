@@ -1,19 +1,15 @@
 ﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NFormItem, NForm, NTag } from 'naive-ui'
 import { SyncOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import ImagePreview from '../../components/common/ImagePreview.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -58,9 +54,9 @@ const handleConvert = async () => {
     outputSize.value = bytes.length
     const blob = new Blob([bytes], { type: `image/${outputFormat.value}` })
     outputBlobUrl.value = URL.createObjectURL(blob)
-    notification.success({ title: '转换成功', content: `已转换为 ${outputFormat.value.toUpperCase()} 格式` })
+    notifySuccess('转换成功', `已转换为 ${outputFormat.value.toUpperCase()} 格式`)
   } catch (e) {
-    notification.error({ title: '转换失败', content: (e as Error).message })
+    notifyError('转换失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -80,10 +76,10 @@ const handleDownload = async () => {
       const blob = await response.blob()
       const arrayBuffer = await blob.arrayBuffer()
       await writeFile(savePath, new Uint8Array(arrayBuffer))
-      notification.success({ title: '保存成功', content: '图片已保存' })
+      notifySuccess('保存成功', '图片已保存')
     }
   } catch (e) {
-    notification.error({ title: '保存失败', content: (e as Error).message })
+    notifyError('保存失败', (e as Error).message)
   }
 }
 
@@ -139,7 +135,7 @@ const formatFileSize = (bytes: number): string => {
         />
 
         <div v-if="inputImageUrl" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">原图预览</div>
+          <div class="text-sm mb-2 text-gray-500">原图预览</div>
           <div class="flex-1 flex items-center justify-center">
             <ImagePreview :src="inputImageUrl" />
           </div>
@@ -158,7 +154,7 @@ const formatFileSize = (bytes: number): string => {
           @clear="outputBlobUrl = ''"
         />
         <div v-if="outputBlobUrl" class="mt-4 flex-1 min-h-0 flex flex-col">
-          <div class="text-sm mb-2 flex justify-between" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+          <div class="text-sm mb-2 flex justify-between text-gray-500">
             <span>转换结果</span>
             <NTag size="small" type="success">{{ formatFileSize(outputSize) }}</NTag>
           </div>
@@ -166,7 +162,7 @@ const formatFileSize = (bytes: number): string => {
             <ImagePreview :src="outputBlobUrl" />
           </div>
         </div>
-        <div v-else class="mt-4 flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">
           转换结果将显示在这里
         </div>
       </div>

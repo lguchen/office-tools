@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NSelect, NFormItem, NForm, NSwitch } from 'naiv
 import { CreateOutline, ColorFilterOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -28,7 +26,7 @@ const handleFormat = () => {
       outputText.value = JSON.stringify(obj, null, indentSize.value)
     }
     errorInfo.value = null
-    notification.success({ title: '格式化成功', content: 'JSON已格式化' })
+    notifySuccess('格式化成功', 'JSON已格式化')
   } catch (e) {
     const err = e as Error
     const match = err.message.match(/position (\d+)/)
@@ -43,7 +41,7 @@ const handleFormat = () => {
     } else {
       errorInfo.value = { line: 0, column: 0, message: err.message }
     }
-    notification.error({ title: '格式化失败', content: err.message })
+    notifyError('格式化失败', err.message)
   }
 }
 
@@ -66,9 +64,9 @@ const handleCompress = () => {
     const obj = JSON.parse(inputText.value)
     outputText.value = JSON.stringify(obj)
     errorInfo.value = null
-    notification.success({ title: '压缩成功', content: 'JSON已压缩' })
+    notifySuccess('压缩成功', 'JSON已压缩')
   } catch (e) {
-    notification.error({ title: '压缩失败', content: (e as Error).message })
+    notifyError('压缩失败', (e as Error).message)
   }
 }
 
@@ -76,9 +74,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -98,9 +96,9 @@ const handleDownload = async () => {
     a.download = 'formatted.json'
     a.click()
     URL.revokeObjectURL(url)
-    notification.success({ title: '下载成功', content: '文件已保存' })
+    notifySuccess('下载成功', '文件已保存')
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 </script>

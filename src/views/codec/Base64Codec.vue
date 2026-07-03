@@ -5,10 +5,8 @@ import { SwapHorizontalOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
-import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const mode = ref<'text' | 'file'>('text')
 const inputText = ref('')
@@ -39,17 +37,17 @@ const handleEncode = async () => {
         binary += String.fromCharCode(bytes[i])
       }
       outputText.value = btoa(binary)
-      notification.success({ title: '编码成功', content: 'Base64编码完成' })
+      notifySuccess('编码成功', 'Base64编码完成')
     } else {
       if (!inputFile.value) return
       const arrayBuffer = await inputFile.value.arrayBuffer()
       const bytes = new Uint8Array(arrayBuffer)
       const result = await invoke<string>('base64_encode_file_data', { data: Array.from(bytes) })
       outputText.value = result
-      notification.success({ title: '编码成功', content: '文件Base64编码完成' })
+      notifySuccess('编码成功', '文件Base64编码完成')
     }
   } catch (e) {
-    notification.error({ title: '编码失败', content: (e as Error).message })
+    notifyError('编码失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -67,7 +65,7 @@ const handleDecode = async () => {
       }
       const decoder = new TextDecoder('utf-8')
       outputText.value = decoder.decode(bytes)
-      notification.success({ title: '解码成功', content: 'Base64解码完成' })
+      notifySuccess('解码成功', 'Base64解码完成')
     } else {
       if (!inputFile.value) return
       const text = await inputFile.value.text()
@@ -81,10 +79,10 @@ const handleDecode = async () => {
       a.click()
       URL.revokeObjectURL(url)
       outputText.value = `解码成功，文件大小: ${bytes.length} 字节`
-      notification.success({ title: '解码成功', content: 'Base64解码完成，文件已下载' })
+      notifySuccess('解码成功', 'Base64解码完成，文件已下载')
     }
   } catch (e) {
-    notification.error({ title: '解码失败', content: (e as Error).message })
+    notifyError('解码失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -102,9 +100,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

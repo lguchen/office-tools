@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, computed, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, computed, onBeforeUnmount, nextTick, onMounted } from 'vue'
 import { NSpin, NIcon, NEmpty, NTabs, NTabPane, NTag, NButton } from 'naive-ui'
 import { DocumentTextOutline, ImageOutline, DocumentOutline, GridOutline, Document, CloseOutline } from '@vicons/ionicons5'
 import * as XLSX from 'xlsx'
 import mammoth from 'mammoth'
-import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   file?: File | null
@@ -19,8 +18,6 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'selection-change', data: SelectionData | null): void
 }>()
-
-const { isDark } = useTheme()
 
 interface SelectionData {
   type: 'excel' | 'word' | 'text' | 'image'
@@ -116,43 +113,25 @@ const getSelectionData = (): SelectionData | null => {
 }
 
 const getExcelHeaderStyle = (): string => {
-  const base = 'table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;white-space:nowrap;}'
-  if (isDark.value) {
-    return base + 'th{background-color:#1f2937;color:#e5e7eb;font-weight:600;}td{color:#d1d5db;}tr:nth-child(even){background-color:#111827;}'
-  }
+  const base = 'table{border-collapse:collapse;min-width:100%;font-size:12px;}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;white-space:nowrap;}'
   return base + 'th{background-color:#f6f8fa;font-weight:600;}tr:nth-child(even){background-color:#fafbfc;}'
 }
 
 const injectWordColors = () => {
   const root = document.documentElement
-  if (isDark.value) {
-    root.style.setProperty('--word-text-color', '#e5e7eb')
-    root.style.setProperty('--word-border-color', '#4b5563')
-    root.style.setProperty('--word-header-bg', '#1f2937')
-    root.style.setProperty('--word-row-bg', '#111827')
-    root.style.setProperty('--word-muted-text', '#9ca3af')
-    root.style.setProperty('--word-code-bg', '#1f2937')
-    root.style.setProperty('--word-link-color', '#60a5fa')
-  } else {
-    root.style.setProperty('--word-text-color', '#1f2328')
-    root.style.setProperty('--word-border-color', '#d0d7de')
-    root.style.setProperty('--word-header-bg', '#f6f8fa')
-    root.style.setProperty('--word-row-bg', '#f6f8fa')
-    root.style.setProperty('--word-muted-text', '#57606a')
-    root.style.setProperty('--word-code-bg', '#f6f8fa')
-    root.style.setProperty('--word-link-color', '#0969da')
-  }
+  root.style.setProperty('--word-text-color', '#1f2328')
+  root.style.setProperty('--word-border-color', '#d0d7de')
+  root.style.setProperty('--word-header-bg', '#f6f8fa')
+  root.style.setProperty('--word-row-bg', '#f6f8fa')
+  root.style.setProperty('--word-muted-text', '#57606a')
+  root.style.setProperty('--word-code-bg', '#f6f8fa')
+  root.style.setProperty('--word-link-color', '#0969da')
 }
 
 const injectExcelColors = () => {
   const root = document.documentElement
-  if (isDark.value) {
-    root.style.setProperty('--excel-highlight-bg', '#1e3a5f')
-    root.style.setProperty('--excel-highlight-border', '#60a5fa')
-  } else {
-    root.style.setProperty('--excel-highlight-bg', '#e6f4ff')
-    root.style.setProperty('--excel-highlight-border', '#1677ff')
-  }
+  root.style.setProperty('--excel-highlight-bg', '#e6f4ff')
+  root.style.setProperty('--excel-highlight-border', '#1677ff')
 }
 
 defineExpose({
@@ -427,13 +406,10 @@ watch(activeSheet, async () => {
   }
 })
 
-watch(isDark, () => {
+onMounted(() => {
   injectWordColors()
   injectExcelColors()
-  if (previewType.value === 'excel') {
-    loadExcel(props.file!)
-  }
-}, { immediate: true })
+})
 
 onBeforeUnmount(() => {
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
@@ -465,8 +441,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="flex-1 min-h-0 border rounded-lg overflow-hidden"
-         :class="isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'">
+    <div class="flex-1 min-h-0 border rounded-lg overflow-hidden bg-white border-gray-200">
       <NSpin v-if="loading" class="h-full flex items-center justify-center">
         <div class="opacity-60">加载预览中...</div>
       </NSpin>
@@ -506,8 +481,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else-if="previewType === 'word'" class="h-full overflow-auto">
-        <div class="word-container p-6 max-w-4xl mx-auto"
-             :class="isDark ? 'text-gray-200' : 'text-gray-800'"
+        <div class="word-container p-6 max-w-4xl mx-auto text-gray-800"
              v-html="wordHtml"></div>
       </div>
 
@@ -652,7 +626,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.excel-container #excel-table) {
-  width: 100%;
+  min-width: 100%;
   margin: 0;
 }
 

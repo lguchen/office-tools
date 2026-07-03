@@ -2,8 +2,6 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { NIcon, NButton, NSlider } from 'naive-ui'
 import { AddOutline, RemoveOutline, ExpandOutline, ContractOutline, RefreshOutline } from '@vicons/ionicons5'
-import { useTheme } from '../../composables/useTheme'
-
 interface Props {
   src?: string
   path?: string
@@ -19,8 +17,6 @@ const props = withDefaults(defineProps<Props>(), {
   minWidth: 200,
   minHeight: 200
 })
-
-const { isDark } = useTheme()
 
 // 缩放和位置状态
 const scale = ref(1)
@@ -207,21 +203,19 @@ onMounted(() => {
 
 <template>
   <div
-    class="image-preview-container relative overflow-hidden rounded-lg border select-none"
-    :class="isDark ? 'bg-gray-900 border-gray-700' : 'bg-gray-100 border-gray-300'"
+    class="image-preview-container relative overflow-hidden rounded-lg border select-none bg-gray-100 border-gray-300"
     :style="{ width: `${containerWidth}px`, height: `${containerHeight}px` }"
     @wheel="handleWheel"
   >
     <!-- 工具栏 -->
     <div
-      class="absolute top-2 left-2 right-2 z-10 flex items-center justify-between px-2 py-1 rounded-lg backdrop-blur-sm"
-      :class="isDark ? 'bg-gray-800/80' : 'bg-white/80'"
+      class="absolute top-2 left-2 right-2 z-10 flex items-center justify-between px-2 py-1 rounded-lg backdrop-blur-sm bg-white/80"
     >
       <div class="flex items-center gap-2">
         <NButton quaternary size="small" @click="zoomOut">
           <template #icon><NIcon><RemoveOutline /></NIcon></template>
         </NButton>
-        <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">{{ Math.round(scale * 100) }}%</span>
+        <span class="text-xs text-gray-500">{{ Math.round(scale * 100) }}%</span>
         <NButton quaternary size="small" @click="zoomIn">
           <template #icon><NIcon><AddOutline /></NIcon></template>
         </NButton>
@@ -248,7 +242,7 @@ onMounted(() => {
       </div>
 
       <!-- 错误状态 -->
-      <div v-else-if="hasError" class="flex flex-col items-center justify-center" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+      <div v-else-if="hasError" class="flex flex-col items-center justify-center text-gray-400">
         <NIcon size="48"><ContractOutline /></NIcon>
         <span class="mt-2">图片加载失败</span>
       </div>
@@ -314,8 +308,7 @@ onMounted(() => {
     <!-- 图片信息 -->
     <div
       v-if="!isLoading && !hasError && imageWidth"
-      class="absolute bottom-2 left-2 px-2 py-1 rounded text-xs backdrop-blur-sm"
-      :class="isDark ? 'bg-gray-800/80 text-gray-400' : 'bg-white/80 text-gray-500'"
+      class="absolute bottom-2 left-2 px-2 py-1 rounded text-xs backdrop-blur-sm bg-white/80 text-gray-500"
     >
       {{ imageWidth }} × {{ imageHeight }} px
     </div>

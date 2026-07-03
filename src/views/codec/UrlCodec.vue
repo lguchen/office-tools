@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NSwitch, NFormItem, NForm } from 'naive-ui'
 import { SwapHorizontalOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -27,9 +25,9 @@ const handleEncode = () => {
     } else {
       outputText.value = encodeURIComponent(inputText.value)
     }
-    notification.success({ title: '编码成功', content: 'URL编码完成' })
+    notifySuccess('编码成功', 'URL编码完成')
   } catch (e) {
-    notification.error({ title: '编码失败', content: (e as Error).message })
+    notifyError('编码失败', (e as Error).message)
   }
 }
 
@@ -37,9 +35,9 @@ const handleDecode = () => {
   if (!canDecode.value) return
   try {
     outputText.value = decodeURIComponent(inputText.value)
-    notification.success({ title: '解码成功', content: 'URL解码完成' })
+    notifySuccess('解码成功', 'URL解码完成')
   } catch (e) {
-    notification.error({ title: '解码失败', content: '输入的URL编码格式不正确' })
+    notifyError('解码失败', '输入的URL编码格式不正确')
   }
 }
 
@@ -53,9 +51,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

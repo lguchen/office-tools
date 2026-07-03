@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { NButton, NIcon } from 'naive-ui'
 import { ExpandOutline, ContractOutline } from '@vicons/ionicons5'
-import { useTheme } from '../../composables/useTheme'
 
 interface Props {
   title?: string
@@ -17,8 +16,6 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'update:detached', v: boolean): void
 }>()
-
-const { isDark } = useTheme()
 
 const isDetached = ref(props.detached)
 let popupWindow: Window | null = null
@@ -56,6 +53,19 @@ const loadWindowPos = () => {
   return { x: 100, y: 100, w: 900, h: 700 }
 }
 
+const syncStyles = () => {
+  if (!popupWindow || popupWindow.closed) return
+  const targetHead = popupWindow.document.head
+  // Copy style tags
+  document.querySelectorAll('style').forEach(style => {
+    targetHead.appendChild(style.cloneNode(true))
+  })
+  // Copy link tags
+  document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+    targetHead.appendChild(link.cloneNode(true))
+  })
+}
+
 const openDetachedWindow = () => {
   const pos = loadWindowPos()
   const features = `width=${pos.w},height=${pos.h},left=${pos.x},top=${pos.y},resizable=yes,scrollbars=yes,status=no,menubar=no,toolbar=no`
@@ -68,10 +78,6 @@ const openDetachedWindow = () => {
     return
   }
 
-  const themeClass = isDark.value ? 'dark-theme' : 'light-theme'
-  const bgColor = isDark.value ? '#111827' : '#f3f4f6'
-  const textColor = isDark.value ? '#e5e7eb' : '#1f2937'
-
   popupWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -82,8 +88,8 @@ const openDetachedWindow = () => {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-          background: ${bgColor};
-          color: ${textColor};
+          background: #f3f4f6;
+          color: #1f2937;
           overflow: hidden;
         }
         #preview-container {
@@ -94,8 +100,8 @@ const openDetachedWindow = () => {
         #preview-title {
           padding: 8px 12px;
           font-size: 13px;
-          border-bottom: 1px solid ${isDark.value ? '#374151' : '#e5e7eb'};
-          background: ${isDark.value ? '#1f2937' : '#ffffff'};
+          border-bottom: 1px solid #e5e7eb;
+          background: #ffffff;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -112,7 +118,7 @@ const openDetachedWindow = () => {
         }
       </style>
     </head>
-    <body class="${themeClass}">
+    <body class="light-theme">
       <div id="preview-container">
         <div id="preview-title">
           <span>${props.title}</span>
@@ -124,6 +130,9 @@ const openDetachedWindow = () => {
     </html>
   `)
   popupWindow.document.close()
+
+  // Copy all styles from parent document
+  syncStyles()
 
   const checkClose = setInterval(() => {
     if (!popupWindow || popupWindow.closed) {
@@ -158,7 +167,10 @@ const syncContent = () => {
 
   const targetEl = popupWindow.document.getElementById('preview-content')
   if (targetEl) {
-    targetEl.innerHTML = contentSlotRef.value.innerHTML
+    // Clone node to preserve inline styles and structure
+    targetEl.innerHTML = ''
+    const clone = contentSlotRef.value.cloneNode(true) as HTMLElement
+    targetEl.appendChild(clone)
   }
 }
 
@@ -195,9 +207,8 @@ defineExpose({
 
 <template>
   <div class="detachable-preview h-full flex flex-col">
-    <div class="flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0"
-         :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'">
-      <span class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+    <div class="flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-white">
+      <span class="text-sm font-medium text-gray-700">
         {{ title }}
       </span>
       <NButton size="small" text @click="toggleDetach">
@@ -214,8 +225,7 @@ defineExpose({
       <div v-show="!isDetached" ref="contentSlotRef" class="h-full">
         <slot></slot>
       </div>
-      <div v-show="isDetached" class="h-full flex items-center justify-center text-sm"
-           :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+      <div v-show="isDetached" class="h-full flex items-center justify-center text-sm text-gray-400">
         <div class="text-center">
           <NIcon size="32" class="mb-2 opacity-50"><ExpandOutline /></NIcon>
           <div>预览已在独立窗口中显示</div>

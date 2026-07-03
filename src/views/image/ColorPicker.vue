@@ -1,15 +1,11 @@
 ﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NTag, NCard, NSpace } from 'naive-ui'
 import { CreateOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
-const { isDark } = useTheme()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -113,9 +109,9 @@ const rgbToHsl = (r: number, g: number, b: number): string => {
 const copyColor = async (color: string) => {
   try {
     await navigator.clipboard.writeText(color)
-    notification.success({ title: '复制成功', content: '颜色值已复制' })
+    notifySuccess('复制成功', '颜色值已复制')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -187,21 +183,21 @@ const pickFromHistory = (color: string) => {
           />
           <div class="p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">HEX</span>
+              <span class="text-sm text-gray-500">HEX</span>
               <div class="flex items-center gap-2">
                 <span class="font-mono">{{ pickedColor }}</span>
                 <NButton size="tiny" text @click="copyColor(pickedColor)">复制</NButton>
               </div>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">RGB</span>
+              <span class="text-sm text-gray-500">RGB</span>
               <div class="flex items-center gap-2">
                 <span class="font-mono text-sm">{{ rgbColor }}</span>
                 <NButton size="tiny" text @click="copyColor(rgbColor)">复制</NButton>
               </div>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">HSL</span>
+              <span class="text-sm text-gray-500">HSL</span>
               <div class="flex items-center gap-2">
                 <span class="font-mono text-sm">{{ hslColor }}</span>
                 <NButton size="tiny" text @click="copyColor(hslColor)">复制</NButton>
@@ -211,7 +207,7 @@ const pickFromHistory = (color: string) => {
         </NCard>
 
         <div v-if="colorHistory.length > 0">
-          <div class="text-sm mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">历史颜色</div>
+          <div class="text-sm mb-2 text-gray-500">历史颜色</div>
           <div class="flex flex-wrap gap-2">
             <div
               v-for="color in colorHistory"

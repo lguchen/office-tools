@@ -11,7 +11,6 @@ export interface PrintSettings {
 }
 
 export const useSettingsStore = defineStore('settings', () => {
-  const theme = ref<'light' | 'dark'>('dark')
   const defaultPrinter = ref<string>('')
   const printSettings = ref<PrintSettings>({
     printer: '',
@@ -21,10 +20,6 @@ export const useSettingsStore = defineStore('settings', () => {
     duplex: 'none',
     colorMode: 'color'
   })
-
-  const setTheme = (newTheme: 'light' | 'dark') => {
-    theme.value = newTheme
-  }
 
   const setDefaultPrinter = (printer: string) => {
     defaultPrinter.value = printer
@@ -36,10 +31,8 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   return {
-    theme,
     defaultPrinter,
     printSettings,
-    setTheme,
     setDefaultPrinter,
     updatePrintSettings
   }

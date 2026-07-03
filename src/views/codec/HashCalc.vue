@@ -5,10 +5,8 @@ import { CreateOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
-import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const mode = ref<'text' | 'file'>('text')
 const inputText = ref('')
@@ -35,17 +33,17 @@ const handleCalculate = async () => {
       const data = Array.from(encoder.encode(inputText.value))
       const results = await invoke<Record<string, string>>('calculate_hashes', { data })
       hashResults.value = results
-      notification.success({ title: '计算完成', content: '哈希值计算完成' })
+      notifySuccess('计算完成', '哈希值计算完成')
     } else {
       if (!inputFile.value) return
       const arrayBuffer = await inputFile.value.arrayBuffer()
       const data = Array.from(new Uint8Array(arrayBuffer))
       const results = await invoke<Record<string, string>>('calculate_hashes', { data })
       hashResults.value = results
-      notification.success({ title: '计算完成', content: '文件哈希值计算完成' })
+      notifySuccess('计算完成', '文件哈希值计算完成')
     }
   } catch (e) {
-    notification.error({ title: '计算失败', content: (e as Error).message })
+    notifyError('计算失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -56,9 +54,9 @@ const handleCopy = async (algo: string) => {
   if (!value) return
   try {
     await navigator.clipboard.writeText(value)
-    notification.success({ title: '复制成功', content: `${algo} 已复制到剪贴板` })
+    notifySuccess('复制成功', `${algo} 已复制到剪贴板`)
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

@@ -25,9 +25,9 @@ import {
   NTag,
   NDivider,
   NSwitch,
-  NAlert,
-  useNotification
+  NAlert
 } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import {
   Document,
   Packer,
@@ -46,9 +46,6 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 // 上传的文件列表
 const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
@@ -164,15 +161,12 @@ const doProcessForIndex = async (index: number, showNotification: boolean) => {
     }
 
     if (showNotification) {
-      notification.success({
-        title: '处理完成',
-        content: `${file.name} 处理完成`
-      })
+      notifySuccess('处理完成', `${file.name} 处理完成`)
     }
   } catch (e) {
     console.error('Process error:', e)
     if (showNotification) {
-      notification.error({ title: '处理失败', content: (e as Error).message })
+      notifyError('处理失败', (e as Error).message)
     }
   }
 }
@@ -243,13 +237,13 @@ const processText = (text: string): string => {
 // 执行批量处理
 const handleProcess = async () => {
   if (fileList.value.length === 0) {
-    notification.warning({ title: '提示', content: '请先上传Word文档' })
+    notifyWarning('提示', '请先上传Word文档')
     return
   }
 
   const validFiles = fileList.value.filter(f => f.file)
   if (validFiles.length === 0) {
-    notification.warning({ title: '提示', content: '没有有效的文件' })
+    notifyWarning('提示', '没有有效的文件')
     return
   }
 
@@ -283,9 +277,9 @@ const handleProcess = async () => {
       detachableRef.value.syncContent()
     }
 
-    notification.success({ title: '处理完成', content: '所有文件处理成功' })
+    notifySuccess('处理完成', '所有文件处理成功')
   } catch (error) {
-    notification.error({ title: '处理失败', content: (error as Error).message })
+    notifyError('处理失败', (error as Error).message)
     processResults.value.forEach((r, i) => {
       if (r.status === 'pending') {
         processResults.value[i] = { ...r, status: 'error', message: '处理失败' }
@@ -375,7 +369,7 @@ const handleClear = () => {
       <div class="space-y-4">
         <!-- 文件上传区域 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Word文档
           </div>
           <FileDropZone
@@ -383,7 +377,7 @@ const handleClear = () => {
             :multiple="true"
             @files-selected="handleFilesSelected"
           />
-          <div class="mt-1 text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+          <div class="mt-1 text-xs text-gray-400">
             支持 .docx 格式，最多10个文件
           </div>
         </div>
@@ -392,7 +386,7 @@ const handleClear = () => {
 
         <!-- 处理模式选择 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             处理模式
           </div>
           <NSpace>
@@ -413,15 +407,14 @@ const handleClear = () => {
 
         <!-- 查找替换规则 -->
         <div v-if="processMode === 'replace'">
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             替换规则
           </div>
           <div class="space-y-2">
             <div
               v-for="(rule, index) in replaceRules"
               :key="index"
-              class="p-3 rounded-lg border"
-              :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+              class="p-3 rounded-lg border border-gray-200 bg-gray-50"
             >
               <div class="flex items-center gap-2 mb-2">
                 <div class="flex-1">
@@ -449,7 +442,7 @@ const handleClear = () => {
               </div>
               <div class="flex items-center gap-2">
                 <NSwitch v-model:value="rule.useWildcard" size="small" />
-                <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                <span class="text-xs text-gray-500">
                   使用通配符（*匹配任意字符，?匹配单个字符）
                 </span>
               </div>
@@ -465,15 +458,14 @@ const handleClear = () => {
 
         <!-- 删除内容规则 -->
         <div v-if="processMode === 'delete'">
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             删除规则
           </div>
           <div class="space-y-2">
             <div
               v-for="(rule, index) in deleteRules"
               :key="index"
-              class="p-3 rounded-lg border"
-              :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+              class="p-3 rounded-lg border border-gray-200 bg-gray-50"
             >
               <div class="flex items-center gap-2 mb-2">
                 <div class="flex-1">
@@ -495,7 +487,7 @@ const handleClear = () => {
               </div>
               <div class="flex items-center gap-2">
                 <NSwitch v-model:value="rule.useWildcard" size="small" />
-                <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                <span class="text-xs text-gray-500">
                   使用通配符（*匹配任意字符，?匹配单个字符）
                 </span>
               </div>
@@ -534,8 +526,7 @@ const handleClear = () => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -553,7 +544,7 @@ const handleClear = () => {
             </NButton>
             <div class="flex-1"></div>
             <div class="flex items-center gap-2">
-              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+              <span class="text-xs text-gray-500">实时预览</span>
               <NSwitch v-model:value="realtimePreview" size="small" />
             </div>
             <NButton
@@ -569,11 +560,9 @@ const handleClear = () => {
           </div>
 
           <div class="flex-1 min-h-0 flex">
-            <div class="w-56 border-r flex-shrink-0 flex flex-col"
-                 :class="isDark ? 'border-gray-700' : 'border-gray-200'">
-              <div class="px-3 py-2 border-b flex items-center justify-between"
-                   :class="isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50'">
-                <span class="text-xs font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-600'">文件列表</span>
+            <div class="w-56 border-r flex-shrink-0 flex flex-col border-gray-200">
+              <div class="px-3 py-2 border-b flex items-center justify-between border-gray-200 bg-gray-50">
+                <span class="text-xs font-medium text-gray-600">文件列表</span>
                 <NButton
                   v-if="processResults.some(r => r.status === 'success')"
                   size="tiny"
@@ -588,7 +577,7 @@ const handleClear = () => {
                     v-for="(file, index) in fileList"
                     :key="index"
                     class="cursor-pointer transition-colors"
-                    :class="currentFileIndex === index ? (isDark ? 'bg-gray-700/50' : 'bg-blue-50') : ''"
+                    :class="currentFileIndex === index ? 'bg-blue-50' : ''"
                     @click="selectFile(index)"
                   >
                     <template #prefix>
@@ -598,7 +587,7 @@ const handleClear = () => {
                     </template>
                     <div class="flex items-center justify-between w-full min-w-0">
                       <div class="truncate pr-2">
-                        <div class="font-medium text-xs truncate" :class="isDark ? 'text-gray-200' : 'text-gray-700'">{{ file.name }}</div>
+                        <div class="font-medium text-xs truncate text-gray-700">{{ file.name }}</div>
                         <div class="text-xs opacity-70">
                           {{ processResults[index]?.message || '未处理' }}
                         </div>
@@ -613,8 +602,7 @@ const handleClear = () => {
                     </div>
                   </NListItem>
                 </NList>
-                <div v-if="fileList.length === 0" class="p-4 text-center text-xs"
-                     :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+                <div v-if="fileList.length === 0" class="p-4 text-center text-xs text-gray-400">
                   请先上传Word文档
                 </div>
               </div>
@@ -626,8 +614,7 @@ const handleClear = () => {
                 :array-buffer="displayBuffer"
                 class="h-full"
               />
-              <div v-else class="h-full flex items-center justify-center"
-                   :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+              <div v-else class="h-full flex items-center justify-center text-gray-400">
                 <div class="text-center text-sm">
                   <div>上传.docx文件后可在此预览</div>
                   <div class="text-xs mt-1 opacity-70">选择左侧文件查看不同文档</div>

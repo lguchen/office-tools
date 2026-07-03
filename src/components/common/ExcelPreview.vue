@@ -2,7 +2,6 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { NIcon, NButton, NSpin, NSelect } from 'naive-ui'
 import { AddOutline, RemoveOutline, GridOutline } from '@vicons/ionicons5'
-import { useTheme } from '../../composables/useTheme'
 import * as XLSX from 'xlsx'
 
 interface Props {
@@ -24,8 +23,6 @@ const emit = defineEmits<{
   (e: 'loaded', data: { sheetNames: string[]; sheetCount: number }): void
   (e: 'error', err: Error): void
 }>()
-
-const { isDark } = useTheme()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(false)
@@ -165,15 +162,15 @@ const renderTableFallback = (workbook: XLSX.WorkBook, sheetName: string) => {
   const ws = workbook.Sheets[sheetName]
   const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
 
-  const borderColor = isDark.value ? '#374151' : '#e5e7eb'
-  const headerBg = isDark.value ? '#1f2937' : '#f3f4f6'
-  const textColor = isDark.value ? '#d1d5db' : '#374151'
-  const rowBg = isDark.value ? '#111827' : '#ffffff'
+  const borderColor = '#e5e7eb'
+  const headerBg = '#f3f4f6'
+  const textColor = '#374151'
+  const rowBg = '#ffffff'
   const maxRows = Math.min(data.length, 200)
   const maxCols = Math.min(Math.max(...data.map(r => r.length), 0), 50)
 
   let html = `<div style="overflow:auto;max-height:100%;width:100%;">`
-  html += `<table style="border-collapse:collapse;width:100%;font-size:12px;">`
+  html += `<table style="border-collapse:collapse;min-width:100%;font-size:12px;">`
 
   // 表头
   if (maxRows > 0) {
@@ -197,7 +194,7 @@ const renderTableFallback = (workbook: XLSX.WorkBook, sheetName: string) => {
   html += '</tbody></table>'
 
   if (data.length > 200) {
-    html += `<div style="padding:8px;color:${isDark.value ? '#9ca3af' : '#6b7280'};font-size:12px;">仅显示前200行，共${data.length}行</div>`
+    html += `<div style="padding:8px;color:#6b7280;font-size:12px;">仅显示前200行，共${data.length}行</div>`
   }
   html += '</div>'
   return html
@@ -254,14 +251,13 @@ defineExpose({
 </script>
 
 <template>
-  <div class="excel-preview h-full flex flex-col" :class="isDark ? 'bg-gray-900' : 'bg-gray-100'">
-    <div class="flex items-center justify-between px-3 py-2 border-b flex-shrink-0"
-         :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'">
+  <div class="excel-preview h-full flex flex-col bg-gray-100">
+    <div class="flex items-center justify-between px-3 py-2 border-b flex-shrink-0 border-gray-200 bg-white">
       <div class="flex items-center gap-2">
-        <NIcon size="16" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <NIcon size="16" class="text-gray-500">
           <GridOutline />
         </NIcon>
-        <span class="text-sm" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+        <span class="text-sm text-gray-700">
           {{ currentSheet || '未加载' }}
         </span>
         <div v-if="sheetNames.length > 1" class="w-28 ml-2">
@@ -273,7 +269,7 @@ defineExpose({
         <NButton size="small" text @click="zoomOut" :disabled="localZoom <= 0.5">
           <template #icon><NIcon><RemoveOutline /></NIcon></template>
         </NButton>
-        <span class="text-xs w-12 text-center" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <span class="text-xs w-12 text-center text-gray-500">
           {{ Math.round(localZoom * 100) }}%
         </span>
         <NButton size="small" text @click="zoomIn" :disabled="localZoom >= 2">
@@ -283,13 +279,11 @@ defineExpose({
     </div>
 
     <div class="flex-1 min-h-0 overflow-auto relative">
-      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center z-10"
-           :class="isDark ? 'bg-gray-900/80' : 'bg-white/80'">
+      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center z-10 bg-white/80">
         <NSpin size="large" />
       </div>
       <div ref="containerRef" class="excel-container w-full h-full overflow-auto">
-        <div v-if="!file && !arrayBuffer && !data" class="h-full flex items-center justify-center"
-             :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+        <div v-if="!file && !arrayBuffer && !data" class="h-full flex items-center justify-center text-gray-400">
           <div class="text-center text-sm">暂无数据，请上传Excel文件</div>
         </div>
       </div>

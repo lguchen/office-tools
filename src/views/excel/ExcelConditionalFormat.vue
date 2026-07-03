@@ -1,19 +1,15 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NRadioGroup, NRadio, NInput, NInputNumber, NSpace, NTag, NSelect } from 'naive-ui'
 import { DownloadOutline, ColorPaletteOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import ExcelPreview from '../../components/common/ExcelPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
 import * as XLSX from 'xlsx'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 // 文件数据
 const fileName = ref('')
@@ -178,52 +174,65 @@ watch([selectedRule, thresholdValue, searchText, rangeMin, rangeMax, highlightCo
 
 // 文件上传处理
 const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
-  if (files.length === 0 || !files[0].file) return
-  const file = files[0].file
+  if (files.length === 0) return
 
-  const validExtensions = ['.xlsx', '.xls', '.csv']
-  const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  const fileItem = files[0]
+  const validExtensions = ['xlsx', 'xls', 'csv']
+  const fileExt = fileItem.name.split('.').pop()?.toLowerCase() || ''
 
   if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx, .xls 或 .csv 文件' })
+    notifyError('文件格式错误', '请上传 .xlsx, .xls 或 .csv 文件')
     return
   }
 
-  fileName.value = file.name
+  fileName.value = fileItem.name
 
   try {
-    const arrayBuffer = await file.arrayBuffer()
+    let arrayBuffer: ArrayBuffer
+
+    if (fileItem.file) {
+      arrayBuffer = await fileItem.file.arrayBuffer()
+    } else if (fileItem.path) {
+      const { readFile } = await import('@tauri-apps/plugin-fs')
+      const data = await readFile(fileItem.path)
+      arrayBuffer = data.buffer
+    } else {
+      notifyError('导入失败', '无法读取文件内容')
+      handleClear()
+      return
+    }
+
     const wb = XLSX.read(arrayBuffer, { type: 'array' })
     workbook.value = wb
 
     const firstSheetName = wb.SheetNames[0]
     const worksheet = wb.Sheets[firstSheetName]
 
-    // 转换为二维数组
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
+    const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' })
 
     if (jsonData.length === 0) {
-      notification.error({ title: '文件为空', content: '文件中没有数据' })
+      notifyError('文件为空', '文件中没有数据')
+      handleClear()
       return
     }
 
-    // 第一行作为表头
-    headers.value = (jsonData[0] as string[]).map((h, idx) => h?.toString() || `列${idx + 1}`)
+    headers.value = jsonData[0].map((h: any, idx: number) => h?.toString() || `列${idx + 1}`)
     fileData.value = jsonData.slice(1)
 
-    // 自动应用当前规则
     applyRule()
 
-    notification.success({ title: '导入成功', content: `已导入 ${fileData.value.length} 行数据` })
+    notifySuccess('导入成功', `已导入 ${fileData.value.length} 行数据`)
   } catch (e) {
-    notification.error({ title: '导入失败', content: (e as Error).message })
+    console.error('Import error:', e)
+    notifyError('导入失败', (e as Error).message)
+    handleClear()
   }
 }
 
 // 导出带条件格式的Excel
 const handleExport = async () => {
   if (!workbook.value || fileData.value.length === 0) {
-    notification.warning({ title: '无数据', content: '请先导入Excel文件' })
+    notifyWarning('无数据', '请先导入Excel文件')
     return
   }
 
@@ -289,13 +298,10 @@ const handleExport = async () => {
       const wbout = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' })
       await writeFile(savePath, new Uint8Array(wbout))
 
-      notification.success({
-        title: '导出成功',
-        content: `文件已保存至: ${savePath}\n注意：样式导出需要xlsx-js-style库支持`
-      })
+      notifySuccess('导出成功', `文件已保存至: ${savePath}\n注意：样式导出需要xlsx-js-style库支持`)
     }
   } catch (e) {
-    notification.error({ title: '导出失败', content: (e as Error).message })
+    notifyError('导出失败', (e as Error).message)
   }
 }
 
@@ -315,7 +321,7 @@ const handleClear = () => {
       <div class="space-y-4 h-full flex flex-col">
         <!-- 条件格式规则选择 -->
         <div class="flex-shrink-0">
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             选择条件格式规则
           </div>
           <NRadioGroup v-model:value="selectedRule">
@@ -334,7 +340,7 @@ const handleClear = () => {
         <div class="flex-shrink-0">
           <!-- 大于/小于某值 -->
           <div v-if="selectedRule === 'greater' || selectedRule === 'less'" class="mt-3">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               {{ selectedRule === 'greater' ? '阈值（大于此值）' : '阈值（小于此值）' }}
             </div>
             <NInputNumber
@@ -346,7 +352,7 @@ const handleClear = () => {
 
           <!-- 包含文本 -->
           <div v-if="selectedRule === 'contains'" class="mt-3">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               搜索文本
             </div>
             <NInput
@@ -358,7 +364,7 @@ const handleClear = () => {
 
           <!-- 范围 -->
           <div v-if="selectedRule === 'range'" class="mt-3 space-y-2">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               数值范围
             </div>
             <div class="flex gap-2">
@@ -367,7 +373,7 @@ const handleClear = () => {
                 placeholder="最小值"
                 size="small"
               />
-              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">至</span>
+              <span class="text-gray-500">至</span>
               <NInputNumber
                 v-model:value="rangeMax"
                 placeholder="最大值"
@@ -378,7 +384,7 @@ const handleClear = () => {
 
           <!-- 高亮颜色选择 -->
           <div class="mt-4">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               高亮颜色
             </div>
             <NSelect
@@ -431,8 +437,7 @@ const handleClear = () => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -473,8 +478,7 @@ const handleClear = () => {
               :data="previewData"
               class="h-full"
             />
-            <div v-else class="h-full flex items-center justify-center"
-                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div v-else class="h-full flex items-center justify-center text-gray-400">
               <div class="text-center">
                 <NIcon :size="48" class="mb-2 opacity-50">
                   <ColorPaletteOutline />

@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NSpace } from 'naive-ui'
 import { AddOutline, RemoveOutline, TextOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -16,19 +14,19 @@ const canConvert = computed(() => inputText.value.length > 0)
 const toUpperCase = () => {
   if (!canConvert.value) return
   outputText.value = inputText.value.toUpperCase()
-  notification.success({ title: '转换完成', content: '已转换为全大写' })
+  notifySuccess('转换完成', '已转换为全大写')
 }
 
 const toLowerCase = () => {
   if (!canConvert.value) return
   outputText.value = inputText.value.toLowerCase()
-  notification.success({ title: '转换完成', content: '已转换为全小写' })
+  notifySuccess('转换完成', '已转换为全小写')
 }
 
 const capitalizeFirst = () => {
   if (!canConvert.value) return
   outputText.value = inputText.value.replace(/\b\w/g, char => char.toUpperCase())
-  notification.success({ title: '转换完成', content: '已转换为首字母大写' })
+  notifySuccess('转换完成', '已转换为首字母大写')
 }
 
 const toggleCase = () => {
@@ -42,16 +40,16 @@ const toggleCase = () => {
     }
   }
   outputText.value = result
-  notification.success({ title: '转换完成', content: '已反转大小写' })
+  notifySuccess('转换完成', '已反转大小写')
 }
 
 const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -70,9 +68,9 @@ const handleDownload = async () => {
     a.download = 'converted.txt'
     a.click()
     URL.revokeObjectURL(url)
-    notification.success({ title: '下载成功', content: '文件已保存' })
+    notifySuccess('下载成功', '文件已保存')
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 </script>

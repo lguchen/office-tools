@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { NSpace, NButton, NIcon } from 'naive-ui'
 import { CopyOutline, CloudDownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { useTheme } from '../../composables/useTheme'
-
 interface Props {
   showCopy?: boolean
   showDownload?: boolean
@@ -21,8 +19,6 @@ withDefaults(defineProps<Props>(), {
   downloadDisabled: false
 })
 
-const { isDark } = useTheme()
-
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'download'): void
@@ -33,8 +29,7 @@ const emit = defineEmits<{
 
 <template>
   <div
-    class="action-bar flex items-center gap-2 p-4 rounded-lg"
-    :class="isDark ? 'bg-gray-800' : 'bg-white border border-gray-200'"
+    class="action-bar flex items-center gap-2 p-4 rounded-lg bg-white border border-gray-200"
   >
     <NSpace>
       <NButton

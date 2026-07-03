@@ -5,7 +5,6 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick, h } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NInput,
@@ -18,9 +17,9 @@ import {
   NAlert,
   NDataTable,
   NPopconfirm,
-  NSwitch,
-  useNotification
+  NSwitch
 } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import {
   DocumentOutline,
   TrashOutline,
@@ -41,9 +40,6 @@ import {
   removeBookmark,
   renameBookmark
 } from '../../composables/useDocxEdit'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 const uploadedFile = ref<{ name: string; path: string; size?: number; file?: File } | null>(null)
 const existingBookmarks = ref<Array<{ name: string; position: string; id: string; originalName: string }>>([])
@@ -135,15 +131,9 @@ const handleFilesSelected = async (files: { name: string; path: string; size?: n
         if (realtimePreview.value) {
           debounceProcess()
         }
-        notification.success({
-          title: '文件已上传',
-          content: `已读取文档书签信息，共 ${bookmarks.length} 个书签`
-        })
+        notifySuccess('文件已上传', `已读取文档书签信息，共 ${bookmarks.length} 个书签`)
       } catch (error) {
-        notification.error({
-          title: '解析失败',
-          content: (error as Error).message
-        })
+        notifyError('解析失败', (error as Error).message)
       }
     }
   }
@@ -213,12 +203,12 @@ const doProcess = async (showNotification: boolean) => {
     }
 
     if (showNotification) {
-      notification.success({ title: '处理成功', content: '文档书签已更新' })
+      notifySuccess('处理成功', '文档书签已更新')
     }
   } catch (error) {
     console.error('Process error:', error)
     if (showNotification) {
-      notification.error({ title: '处理失败', content: (error as Error).message })
+      notifyError('处理失败', (error as Error).message)
     }
   } finally {
     isProcessing.value = false
@@ -227,13 +217,13 @@ const doProcess = async (showNotification: boolean) => {
 
 const handleAddBookmark = () => {
   if (!newBookmarkName.value.trim()) {
-    notification.warning({ title: '提示', content: '请输入书签名称' })
+    notifyWarning('提示', '请输入书签名称')
     return
   }
 
   const allBookmarks = [...existingBookmarks.value, ...bookmarksToAdd.value]
   if (allBookmarks.some(b => b.name === newBookmarkName.value.trim())) {
-    notification.warning({ title: '提示', content: '书签名称已存在' })
+    notifyWarning('提示', '书签名称已存在')
     return
   }
 
@@ -242,14 +232,14 @@ const handleAddBookmark = () => {
     text: `书签 "${newBookmarkName.value.trim()}" 的内容`
   })
   newBookmarkName.value = ''
-  notification.success({ title: '已添加', content: '书签已添加到待添加列表' })
+  notifySuccess('已添加', '书签已添加到待添加列表')
 }
 
 const handleDeleteBookmark = (name: string) => {
   const index = existingBookmarks.value.findIndex(b => b.name === name)
   if (index !== -1) {
     existingBookmarks.value.splice(index, 1)
-    notification.success({ title: '已删除', content: `书签 "${name}" 已删除` })
+    notifySuccess('已删除', `书签 "${name}" 已删除`)
   }
 }
 
@@ -262,14 +252,14 @@ const handleRenameBookmark = (oldName: string) => {
     ...bookmarksToAdd.value.map(b => b.name)
   ]
   if (allNames.includes(newName)) {
-    notification.warning({ title: '提示', content: '书签名称已存在' })
+    notifyWarning('提示', '书签名称已存在')
     return
   }
 
   const index = existingBookmarks.value.findIndex(b => b.name === oldName)
   if (index !== -1) {
     existingBookmarks.value[index].name = newName
-    notification.success({ title: '已重命名', content: `书签 "${oldName}" 已重命名为 "${newName}"` })
+    notifySuccess('已重命名', `书签 "${oldName}" 已重命名为 "${newName}"`)
   }
 }
 
@@ -279,7 +269,7 @@ const removeFromToAddList = (index: number) => {
 
 const handleExport = async () => {
   if (!uploadedFile.value) {
-    notification.warning({ title: '提示', content: '请先上传Word文档' })
+    notifyWarning('提示', '请先上传Word文档')
     return
   }
 
@@ -302,9 +292,9 @@ const handleExport = async () => {
       detachableRef.value.syncContent()
     }
 
-    notification.success({ title: '导出成功', content: '文档书签已更新并导出' })
+    notifySuccess('导出成功', '文档书签已更新并导出')
   } catch (error) {
-    notification.error({ title: '导出失败', content: (error as Error).message })
+    notifyError('导出失败', (error as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -347,7 +337,7 @@ const displayBuffer = computed(() => {
     <template #input>
       <div class="space-y-4">
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Word文档
           </div>
           <FileDropZone
@@ -355,7 +345,7 @@ const displayBuffer = computed(() => {
             :multiple="false"
             @files-selected="handleFilesSelected"
           />
-          <div class="mt-1 text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+          <div class="mt-1 text-xs text-gray-400">
             支持 .docx 格式，单文件上传
           </div>
         </div>
@@ -363,7 +353,7 @@ const displayBuffer = computed(() => {
         <NDivider class="!my-3" />
 
         <div v-if="uploadedFile">
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             现有书签
           </div>
           <NDataTable
@@ -377,7 +367,7 @@ const displayBuffer = computed(() => {
         <NDivider class="!my-3" />
 
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             添加新书签
           </div>
           <div class="flex gap-2">
@@ -393,20 +383,19 @@ const displayBuffer = computed(() => {
               添加
             </NButton>
           </div>
-          <div class="mt-2 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+          <div class="mt-2 text-xs text-gray-500">
             书签名称不能重复，建议使用有意义的名称如"第一章"、"重要段落"等
           </div>
 
           <div v-if="bookmarksToAdd.length > 0" class="mt-3">
-            <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-xs mb-1 text-gray-500">
               待添加的书签：
             </div>
             <div class="space-y-2">
               <div
                 v-for="(bookmark, index) in bookmarksToAdd"
                 :key="index"
-                class="flex items-center gap-2 p-2 rounded border"
-                :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+                class="flex items-center gap-2 p-2 rounded border border-gray-200 bg-gray-50"
               >
                 <NIcon :size="16" class="text-blue-500">
                   <BookmarkOutline />
@@ -437,11 +426,11 @@ const displayBuffer = computed(() => {
                   <BookmarkOutline />
                 </NIcon>
                 <div>
-                  <div class="text-sm font-medium" :class="isDark ? 'text-gray-200' : 'text-gray-700'">书签统计</div>
-                  <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                  <div class="text-sm font-medium text-gray-700">书签统计</div>
+                  <div class="text-xs text-gray-500">
                     现有书签: {{ existingBookmarks.length }} 个
                   </div>
-                  <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                  <div class="text-xs text-gray-500">
                     待添加书签: {{ bookmarksToAdd.length }} 个
                   </div>
                 </div>
@@ -454,7 +443,7 @@ const displayBuffer = computed(() => {
 
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+            <span class="text-xs text-gray-500">实时预览</span>
             <NSwitch v-model:value="realtimePreview" size="small" />
           </div>
         </div>
@@ -486,8 +475,7 @@ const displayBuffer = computed(() => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -522,8 +510,7 @@ const displayBuffer = computed(() => {
               :array-buffer="displayBuffer"
               class="h-full"
             />
-            <div v-else class="h-full flex items-center justify-center"
-                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div v-else class="h-full flex items-center justify-center text-gray-400">
               <div class="text-center text-sm">
                 <div class="mb-2">上传.docx文件后可在此预览</div>
                 <div class="text-xs opacity-70">支持原始文档 / 处理结果切换查看</div>

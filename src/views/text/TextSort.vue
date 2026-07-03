@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NSwitch, NFormItem, NForm, NSelect } from 'naiv
 import { SwapHorizontalOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -52,9 +50,9 @@ const handleSort = () => {
     })
 
     outputText.value = sorted.join('\n')
-    notification.success({ title: '排序完成', content: `共 ${lines.length} 行已排序` })
+    notifySuccess('排序完成', `共 ${lines.length} 行已排序`)
   } catch (e) {
-    notification.error({ title: '排序失败', content: (e as Error).message })
+    notifyError('排序失败', (e as Error).message)
   }
 }
 
@@ -62,9 +60,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -83,9 +81,9 @@ const handleDownload = async () => {
     a.download = 'sorted.txt'
     a.click()
     URL.revokeObjectURL(url)
-    notification.success({ title: '下载成功', content: '文件已保存' })
+    notifySuccess('下载成功', '文件已保存')
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 </script>

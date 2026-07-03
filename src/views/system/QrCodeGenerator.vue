@@ -4,12 +4,10 @@ import { NInput, NButton, NIcon, NFormItem, NForm, NSelect, NSpace, NSlider } fr
 import { CreateOutline, CloudDownloadOutline, QrCodeOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
-
-const notification = useNotification()
 
 const inputText = ref('https://example.com')
 const qrCodeSize = ref(256)
@@ -31,9 +29,9 @@ const handleGenerate = async () => {
     const bytes = new Uint8Array(result)
     const blob = new Blob([bytes], { type: 'image/png' })
     outputDataUrl.value = URL.createObjectURL(blob)
-    notification.success({ title: '生成成功', content: '二维码已生成' })
+    notifySuccess('生成成功', '二维码已生成')
   } catch (e) {
-    notification.error({ title: '生成失败', content: (e as Error).message })
+    notifyError('生成失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -51,10 +49,10 @@ const handleDownload = async () => {
       const blob = await response.blob()
       const arrayBuffer = await blob.arrayBuffer()
       await writeFile(savePath, new Uint8Array(arrayBuffer))
-      notification.success({ title: '保存成功', content: '二维码已保存' })
+      notifySuccess('保存成功', '二维码已保存')
     }
   } catch (e) {
-    notification.error({ title: '保存失败', content: (e as Error).message })
+    notifyError('保存失败', (e as Error).message)
   }
 }
 
@@ -66,9 +64,9 @@ const handleCopy = async () => {
     await navigator.clipboard.write([
       new ClipboardItem({ 'image/png': blob })
     ])
-    notification.success({ title: '复制成功', content: '二维码已复制到剪贴板' })
+    notifySuccess('复制成功', '二维码已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

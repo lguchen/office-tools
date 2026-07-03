@@ -1,14 +1,13 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NIcon,
   NDivider,
   NSwitch,
-  NSelect,
-  useNotification
+  NSelect
 } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import {
   CreateOutline,
   DownloadOutline,
@@ -19,9 +18,6 @@ import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
 import * as XLSX from 'xlsx'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 const uploadedFiles = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
 const currentFileIndex = ref(0)
@@ -144,15 +140,12 @@ const doProcess = async (showNotification: boolean) => {
     }
 
     if (showNotification) {
-      notification.success({
-        title: '处理完成',
-        content: `共修改 ${changesCount} 处`
-      })
+      notifySuccess('处理完成', `共修改 ${changesCount} 处`)
     }
   } catch (e) {
     console.error('Process error:', e)
     if (showNotification) {
-      notification.error({ title: '处理失败', content: (e as Error).message })
+      notifyError('处理失败', (e as Error).message)
     }
   } finally {
     isProcessing.value = false
@@ -161,7 +154,7 @@ const doProcess = async (showNotification: boolean) => {
 
 const handleProcess = () => {
   if (uploadedFiles.value.length === 0) {
-    notification.warning({ title: '提示', content: '请先上传Word文档' })
+    notifyWarning('提示', '请先上传Word文档')
     return
   }
   const hasOption = processOptions.value.convertLineBreak
@@ -169,7 +162,7 @@ const handleProcess = () => {
     || processOptions.value.removeTabs
     || processOptions.value.removeControlChars
   if (!hasOption) {
-    notification.warning({ title: '提示', content: '请至少选择一项处理选项' })
+    notifyWarning('提示', '请至少选择一项处理选项')
     return
   }
   doProcess(true)
@@ -209,7 +202,7 @@ const displayBuffer = computed(() => {
     <template #input>
       <div class="space-y-4">
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Word文档
           </div>
           <FileDropZone
@@ -223,18 +216,17 @@ const displayBuffer = computed(() => {
         <NDivider class="!my-2" />
 
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             处理选项
           </div>
 
           <div
-            class="p-3 mb-2 rounded-lg border"
-            :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+            class="p-3 mb-2 rounded-lg border border-gray-200 bg-gray-50"
           >
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
                 <NSwitch v-model:value="processOptions.convertLineBreak" size="small" />
-                <span class="text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-700'">转换换行符类型</span>
+                <span class="text-sm text-gray-700">转换换行符类型</span>
               </div>
             </div>
             <div v-if="processOptions.convertLineBreak" class="mt-2 pl-6">
@@ -243,7 +235,7 @@ const displayBuffer = computed(() => {
                 :options="lineBreakOptions"
                 size="small"
               />
-              <div class="mt-1 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+              <div class="mt-1 text-xs text-gray-500">
                 软回车（Shift+Enter）：不分段，仅换行<br/>
                 硬回车（Enter）：分段并换行
               </div>
@@ -251,40 +243,37 @@ const displayBuffer = computed(() => {
           </div>
 
           <div
-            class="p-3 mb-2 rounded-lg border"
-            :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+            class="p-3 mb-2 rounded-lg border border-gray-200 bg-gray-50"
           >
             <div class="flex items-center gap-2">
               <NSwitch v-model:value="processOptions.removeExtraSpaces" size="small" />
-              <span class="text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-700'">删除多余空格</span>
+              <span class="text-sm text-gray-700">删除多余空格</span>
             </div>
-            <div class="mt-1 text-xs pl-6" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="mt-1 text-xs pl-6 text-gray-500">
               删除连续多个空格，只保留一个
             </div>
           </div>
 
           <div
-            class="p-3 mb-2 rounded-lg border"
-            :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+            class="p-3 mb-2 rounded-lg border border-gray-200 bg-gray-50"
           >
             <div class="flex items-center gap-2">
               <NSwitch v-model:value="processOptions.removeTabs" size="small" />
-              <span class="text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-700'">删除制表符</span>
+              <span class="text-sm text-gray-700">删除制表符</span>
             </div>
-            <div class="mt-1 text-xs pl-6" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="mt-1 text-xs pl-6 text-gray-500">
               删除文档中的所有制表符（Tab）
             </div>
           </div>
 
           <div
-            class="p-3 rounded-lg border"
-            :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+            class="p-3 rounded-lg border border-gray-200 bg-gray-50"
           >
             <div class="flex items-center gap-2">
               <NSwitch v-model:value="processOptions.removeControlChars" size="small" />
-              <span class="text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-700'">删除控制字符</span>
+              <span class="text-sm text-gray-700">删除控制字符</span>
             </div>
-            <div class="mt-1 text-xs pl-6" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="mt-1 text-xs pl-6 text-gray-500">
               删除不可见的控制字符，如零宽字符等
             </div>
           </div>
@@ -294,7 +283,7 @@ const displayBuffer = computed(() => {
 
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+            <span class="text-xs text-gray-500">实时预览</span>
             <NSwitch v-model:value="realtimePreview" size="small" />
           </div>
         </div>
@@ -324,8 +313,7 @@ const displayBuffer = computed(() => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -360,8 +348,7 @@ const displayBuffer = computed(() => {
               :array-buffer="displayBuffer"
               class="h-full"
             />
-            <div v-else class="h-full flex items-center justify-center"
-                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div v-else class="h-full flex items-center justify-center text-gray-400">
               <div class="text-center text-sm">上传.docx文件后可在此预览</div>
             </div>
           </div>

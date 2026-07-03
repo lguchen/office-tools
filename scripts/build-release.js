@@ -54,6 +54,23 @@ function ensureDir(dir) {
   }
 }
 
+function copyDirSync(src, dest) {
+  ensureDir(dest);
+  const entries = fs.readdirSync(src);
+  
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry);
+    const destPath = path.join(dest, entry);
+    const stat = fs.statSync(srcPath);
+    
+    if (stat.isDirectory()) {
+      copyDirSync(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
 function buildTauri(bundleType) {
   logStep(`正在构建 ${TARGETS[bundleType].name}...`);
   
@@ -108,6 +125,15 @@ function createPortableVersion() {
     if (fs.existsSync(src)) {
       fs.copyFileSync(src, dest);
     }
+  }
+  
+  const libreofficeSrc = path.join(ROOT_DIR, 'src-tauri', 'resources', 'libreoffice');
+  if (fs.existsSync(libreofficeSrc)) {
+    logInfo('复制 LibreOffice 到便携版目录...');
+    copyDirSync(libreofficeSrc, path.join(portableDir, 'libreoffice'));
+    logSuccess('LibreOffice 复制完成');
+  } else {
+    logInfo('LibreOffice 资源目录不存在，跳过复制');
   }
   
   const readmeContent = `轻量化办公文档工具箱 v${VERSION} 便携版

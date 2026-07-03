@@ -52,3 +52,7 @@ export function notifyError(title: string, content: string) {
 export function notifyInfo(title: string, content: string) {
   useNotificationService().info({ title, content, duration: 2000 })
 }
+
+export function notifyWarning(title: string, content: string) {
+  useNotificationService().warning({ title, content, duration: 2000 })
+}

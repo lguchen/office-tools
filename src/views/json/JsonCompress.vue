@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NFormItem, NForm, NSwitch } from 'naive-ui'
 import { RemoveOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -109,12 +107,9 @@ const handleCompress = () => {
     const saved = originalSize - compressedSize
     const percent = originalSize > 0 ? ((saved / originalSize) * 100).toFixed(1) : '0'
 
-    notification.success({
-      title: '压缩成功',
-      content: `压缩率: ${percent}% (节省 ${saved} 字节)`
-    })
+    notifySuccess('压缩成功', `压缩率: ${percent}% (节省 ${saved} 字节)`)
   } catch (e) {
-    notification.error({ title: '压缩失败', content: (e as Error).message })
+    notifyError('压缩失败', (e as Error).message)
   }
 }
 
@@ -122,9 +117,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -143,9 +138,9 @@ const handleDownload = async () => {
     a.download = 'compressed.json'
     a.click()
     URL.revokeObjectURL(url)
-    notification.success({ title: '下载成功', content: '文件已保存' })
+    notifySuccess('下载成功', '文件已保存')
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 </script>

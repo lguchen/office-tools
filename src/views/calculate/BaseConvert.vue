@@ -3,9 +3,7 @@ import { ref, watch } from 'vue'
 import { NInput, NButton, NIcon, NFormItem, NForm, NGrid, NGi } from 'naive-ui'
 import { SwapHorizontalOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputValue = ref('')
 const fromBase = ref(10)
@@ -41,7 +39,7 @@ const convert = () => {
     }
     results.value = newResults
   } catch (e) {
-    notification.error({ title: '转换失败', content: (e as Error).message })
+    notifyError('转换失败', (e as Error).message)
   }
 }
 
@@ -54,9 +52,9 @@ const copyResult = async (base: number) => {
   if (!value) return
   try {
     await navigator.clipboard.writeText(value)
-    notification.success({ title: '复制成功', content: `${base}进制结果已复制` })
+    notifySuccess('复制成功', `${base}进制结果已复制`)
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

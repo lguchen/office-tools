@@ -10,10 +10,7 @@ import {
   TextOutline
 } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
-const { isDark } = useTheme()
+import { notifySuccess, notifyInfo } from '../../composables/useNotification'
 
 interface PrintJob {
   id: string
@@ -56,7 +53,7 @@ const cancelJob = (id: string) => {
   const job = jobs.value.find(j => j.id === id)
   if (job && (job.status === 'queued' || job.status === 'printing')) {
     job.status = 'cancelled'
-    notification.info({ title: '已取消', content: '打印任务已取消' })
+    notifyInfo('已取消', '打印任务已取消')
   }
 }
 
@@ -66,11 +63,11 @@ const removeJob = (id: string) => {
 
 const clearCompleted = () => {
   jobs.value = jobs.value.filter(j => j.status !== 'completed' && j.status !== 'cancelled' && j.status !== 'failed')
-  notification.success({ title: '已清理', content: '已清除历史任务' })
+  notifySuccess('已清理', '已清除历史任务')
 }
 
 const refresh = () => {
-  notification.info({ title: '已刷新', content: '任务列表已更新' })
+  notifyInfo('已刷新', '任务列表已更新')
 }
 
 const tabs = ['all', 'queued', 'printing', 'completed', 'failed']
@@ -96,27 +93,27 @@ const tabLabels: Record<string, string> = { all: '全部', queued: '等待中', 
           </NButton>
         </div>
 
-        <div class="p-4 rounded-lg border" :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+        <div class="p-4 rounded-lg border bg-white border-gray-200">
           <div class="grid grid-cols-5 gap-4 text-center">
             <div class="p-2">
               <div class="text-2xl font-bold text-gray-300">{{ stats.all }}</div>
-              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">全部</div>
+              <div class="text-xs text-gray-400">全部</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-yellow-500">{{ stats.queued }}</div>
-              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">等待中</div>
+              <div class="text-xs text-gray-400">等待中</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-blue-500">{{ stats.printing }}</div>
-              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">打印中</div>
+              <div class="text-xs text-gray-400">打印中</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-green-500">{{ stats.completed }}</div>
-              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">已完成</div>
+              <div class="text-xs text-gray-400">已完成</div>
             </div>
             <div class="p-2">
               <div class="text-2xl font-bold text-red-500">{{ stats.failed }}</div>
-              <div class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">失败</div>
+              <div class="text-xs text-gray-400">失败</div>
             </div>
           </div>
         </div>
@@ -126,14 +123,14 @@ const tabLabels: Record<string, string> = { all: '全部', queued: '等待中', 
     <template #output>
       <div class="h-full flex flex-col">
         <!-- Tab导航 - 简化实现 -->
-        <div class="flex gap-2 mb-4 border-b pb-2" :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+        <div class="flex gap-2 mb-4 border-b pb-2 border-gray-200">
           <button
             v-for="tab in tabs"
             :key="tab"
             class="px-3 py-1 rounded text-sm transition-colors"
             :class="activeTab === tab
-              ? (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600')
-              : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+              ? 'bg-blue-100 text-blue-600'
+              : 'text-gray-500 hover:text-gray-700'"
             @click="activeTab = tab"
           >
             {{ tabLabels[tab] }}
@@ -142,7 +139,7 @@ const tabLabels: Record<string, string> = { all: '全部', queued: '等待中', 
 
         <div class="flex-1 overflow-auto min-h-0 space-y-2">
           <!-- 空状态 -->
-          <div v-if="filteredJobs.length === 0" class="text-center py-12" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+          <div v-if="filteredJobs.length === 0" class="text-center py-12 text-gray-400">
             <NIcon size="48" class="mb-3 opacity-30">
               <PrintOutline />
             </NIcon>
@@ -153,8 +150,7 @@ const tabLabels: Record<string, string> = { all: '全部', queued: '等待中', 
           <div
             v-for="job in filteredJobs"
             :key="job.id"
-            class="p-3 rounded-lg border transition-colors hover:border-blue-500/30"
-            :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+            class="p-3 rounded-lg border transition-colors hover:border-blue-500/30 bg-white border-gray-200"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
@@ -165,7 +161,7 @@ const tabLabels: Record<string, string> = { all: '全部', queued: '等待中', 
                 </div>
                 <div>
                   <div class="font-medium">{{ job.name }}</div>
-                  <div class="text-xs flex items-center gap-3" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                  <div class="text-xs flex items-center gap-3 text-gray-500">
                     <span>{{ job.printer }}</span>
                     <span>{{ job.pages }} 页</span>
                     <span>{{ job.size }}</span>

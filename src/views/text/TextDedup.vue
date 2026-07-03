@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NSwitch, NFormItem, NForm, NSelect } from 'naiv
 import { TrashOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -52,12 +50,9 @@ const handleDedup = () => {
     const originalCount = lines.length
     const resultCount = result.length
     const removed = originalCount - resultCount
-    notification.success({
-      title: '去重完成',
-      content: `共 ${originalCount} 行，移除 ${removed} 行重复，剩余 ${resultCount} 行`
-    })
+    notifySuccess('去重完成', `共 ${originalCount} 行，移除 ${removed} 行重复，剩余 ${resultCount} 行`)
   } catch (e) {
-    notification.error({ title: '去重失败', content: (e as Error).message })
+    notifyError('去重失败', (e as Error).message)
   }
 }
 
@@ -76,9 +71,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -97,9 +92,9 @@ const handleDownload = async () => {
     a.download = 'deduped.txt'
     a.click()
     URL.revokeObjectURL(url)
-    notification.success({ title: '下载成功', content: '文件已保存' })
+    notifySuccess('下载成功', '文件已保存')
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 </script>

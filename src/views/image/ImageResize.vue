@@ -1,19 +1,15 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NInputNumber, NButton, NIcon, NFormItem, NForm, NSwitch, NTag } from 'naive-ui'
 import { CropOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
 import ImagePreview from '../../components/common/ImagePreview.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 const inputFile = ref<File | null>(null)
 const fileName = ref('')
@@ -93,9 +89,9 @@ const handleResize = async () => {
     outputSize.value = bytes.length
     const blob = new Blob([bytes], { type: 'image/png' })
     outputBlobUrl.value = URL.createObjectURL(blob)
-    notification.success({ title: '调整成功', content: `尺寸已调整为 ${width.value} × ${height.value}` })
+    notifySuccess('调整成功', `尺寸已调整为 ${width.value} × ${height.value}`)
   } catch (e) {
-    notification.error({ title: '调整失败', content: (e as Error).message })
+    notifyError('调整失败', (e as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -114,10 +110,10 @@ const handleDownload = async () => {
       const blob = await response.blob()
       const arrayBuffer = await blob.arrayBuffer()
       await writeFile(savePath, new Uint8Array(arrayBuffer))
-      notification.success({ title: '保存成功', content: '图片已保存' })
+      notifySuccess('保存成功', '图片已保存')
     }
   } catch (e) {
-    notification.error({ title: '保存失败', content: (e as Error).message })
+    notifyError('保存失败', (e as Error).message)
   }
 }
 
@@ -194,14 +190,14 @@ const applyPreset = (preset: any) => {
                 style="width: 100px;"
                 @update:value="onWidthChange"
               />
-              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">×</span>
+              <span class="text-gray-500">×</span>
               <NInputNumber
                 v-model:value="height"
                 placeholder="高度"
                 style="width: 100px;"
                 @update:value="onHeightChange"
               />
-              <span class="text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">px</span>
+              <span class="text-sm text-gray-500">px</span>
             </div>
           </NFormItem>
 
@@ -213,7 +209,7 @@ const applyPreset = (preset: any) => {
                 :max="500"
                 style="width: 100px;"
               />
-              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">%</span>
+              <span class="text-gray-500">%</span>
             </div>
           </NFormItem>
 
@@ -235,7 +231,7 @@ const applyPreset = (preset: any) => {
           </NFormItem>
         </NForm>
 
-        <div v-if="originalWidth > 0" class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <div v-if="originalWidth > 0" class="text-xs text-gray-500">
           原始尺寸: {{ originalWidth }} × {{ originalHeight }} px
         </div>
 
@@ -256,7 +252,7 @@ const applyPreset = (preset: any) => {
         />
 
         <div v-if="inputImageUrl" class="flex-1 min-h-0 flex flex-col">
-          <div class="text-sm mb-2" :class="isDark ? 'text-gray-400' : 'text-gray-500'">原图预览</div>
+          <div class="text-sm mb-2 text-gray-500">原图预览</div>
           <div class="flex-1 flex items-center justify-center">
             <ImagePreview :src="inputImageUrl" />
           </div>
@@ -275,7 +271,7 @@ const applyPreset = (preset: any) => {
           @clear="outputBlobUrl = ''"
         />
         <div v-if="outputBlobUrl" class="mt-4 flex-1 min-h-0 flex flex-col">
-          <div class="text-sm mb-2 flex justify-between" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+          <div class="text-sm mb-2 flex justify-between text-gray-500">
             <span>输出结果</span>
             <NTag size="small" type="success">{{ formatFileSize(outputSize) }}</NTag>
           </div>
@@ -283,7 +279,7 @@ const applyPreset = (preset: any) => {
             <ImagePreview :src="outputBlobUrl" />
           </div>
         </div>
-        <div v-else class="mt-4 flex-1 flex items-center justify-center" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+        <div v-else class="mt-4 flex-1 flex items-center justify-center text-gray-500">
           调整结果将显示在这里
         </div>
       </div>

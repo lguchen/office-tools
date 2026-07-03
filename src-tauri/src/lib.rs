@@ -42,6 +42,8 @@ pub fn run() {
             commands::qrcode::generate_qrcode,
             commands::qrcode::scan_qrcode,
             commands::print::print_file,
+            commands::print::get_excel_sheets,
+            commands::print::cancel_print,
             commands::print::get_printers,
             commands::print::get_printer_details,
             commands::print::scan_network_printers,

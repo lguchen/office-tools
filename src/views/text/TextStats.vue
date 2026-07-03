@@ -3,9 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { NInput, NGrid, NGi, NCard, NButton, NIcon, NSpace } from 'naive-ui'
 import { CreateOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 
@@ -61,9 +59,9 @@ const handleCopy = async () => {
 
   try {
     await navigator.clipboard.writeText(text)
-    notification.success({ title: '复制成功', content: '统计结果已复制到剪贴板' })
+    notifySuccess('复制成功', '统计结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 </script>

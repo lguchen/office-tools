@@ -6,7 +6,6 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NCard,
@@ -20,9 +19,9 @@ import {
   NRadio,
   NList,
   NListItem,
-  NSwitch,
-  useNotification
+  NSwitch
 } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import {
   loadDocx,
   getDocumentXml,
@@ -38,9 +37,6 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 const displayBuffer = computed(() => {
   if (previewMode.value === 'processed' && processedBuffer.value) {
@@ -181,13 +177,13 @@ const doProcessPreview = async () => {
 // 执行处理
 const handleProcess = async () => {
   if (fileList.value.length === 0) {
-    notification.warning({ title: '提示', content: '请先上传Word文档' })
+    notifyWarning('提示', '请先上传Word文档')
     return
   }
 
   const validFiles = fileList.value.filter(f => f.file)
   if (validFiles.length === 0) {
-    notification.warning({ title: '提示', content: '没有有效的文件' })
+    notifyWarning('提示', '没有有效的文件')
     return
   }
 
@@ -226,12 +222,12 @@ const handleProcess = async () => {
       }
     }
 
-    notification.success({ title: '处理完成', content: '所有文件页面布局设置成功' })
+    notifySuccess('处理完成', '所有文件页面布局设置成功')
     if (validFiles.length > 0) {
       doProcessPreview()
     }
   } catch (error) {
-    notification.error({ title: '处理失败', content: (error as Error).message })
+    notifyError('处理失败', (error as Error).message)
     processResults.value.forEach((r, i) => {
       if (r.status === 'pending') {
         processResults.value[i] = { ...r, status: 'error', message: '处理失败' }
@@ -260,7 +256,7 @@ const handleDownload = async (index: number) => {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 
@@ -299,7 +295,7 @@ onUnmounted(() => {
       <div class="space-y-4">
         <!-- 文件上传 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Word文档
           </div>
           <FileDropZone
@@ -313,24 +309,24 @@ onUnmounted(() => {
 
         <!-- 页边距设置 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             页边距（英寸）
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">上边距</div>
+              <div class="text-xs mb-1 text-gray-500">上边距</div>
               <NInputNumber v-model:value="pageSettings.marginTop" :min="0" :max="5" :step="0.1" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">下边距</div>
+              <div class="text-xs mb-1 text-gray-500">下边距</div>
               <NInputNumber v-model:value="pageSettings.marginBottom" :min="0" :max="5" :step="0.1" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">左边距</div>
+              <div class="text-xs mb-1 text-gray-500">左边距</div>
               <NInputNumber v-model:value="pageSettings.marginLeft" :min="0" :max="5" :step="0.1" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">右边距</div>
+              <div class="text-xs mb-1 text-gray-500">右边距</div>
               <NInputNumber v-model:value="pageSettings.marginRight" :min="0" :max="5" :step="0.1" />
             </div>
           </div>
@@ -340,16 +336,16 @@ onUnmounted(() => {
 
         <!-- 纸张设置 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             纸张设置
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">纸张大小</div>
+              <div class="text-xs mb-1 text-gray-500">纸张大小</div>
               <NSelect v-model:value="pageSettings.paperSize" :options="paperSizeOptions" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">纸张方向</div>
+              <div class="text-xs mb-1 text-gray-500">纸张方向</div>
               <NRadioGroup v-model:value="pageSettings.orientation">
                 <NSpace>
                   <NRadio value="portrait">纵向</NRadio>
@@ -364,26 +360,24 @@ onUnmounted(() => {
 
         <!-- 页眉页脚设置 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             页眉页脚（可选）
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">页眉内容</div>
+              <div class="text-xs mb-1 text-gray-500">页眉内容</div>
               <input
                 v-model="pageSettings.headerText"
                 placeholder="输入页眉文本"
-                class="w-full px-3 py-2 rounded-lg border text-sm"
-                :class="isDark ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800'"
+                class="w-full px-3 py-2 rounded-lg border text-sm bg-white border-gray-200 text-gray-800"
               />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">页脚内容</div>
+              <div class="text-xs mb-1 text-gray-500">页脚内容</div>
               <input
                 v-model="pageSettings.footerText"
                 placeholder="输入页脚文本"
-                class="w-full px-3 py-2 rounded-lg border text-sm"
-                :class="isDark ? 'bg-gray-800 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800'"
+                class="w-full px-3 py-2 rounded-lg border text-sm bg-white border-gray-200 text-gray-800"
               />
             </div>
           </div>
@@ -394,7 +388,7 @@ onUnmounted(() => {
         <!-- 实时预览开关 -->
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+            <span class="text-xs text-gray-500">实时预览</span>
             <NSwitch v-model:value="realtimePreview" size="small" />
           </div>
         </div>
@@ -424,8 +418,7 @@ onUnmounted(() => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -454,9 +447,8 @@ onUnmounted(() => {
             </NButton>
           </div>
 
-          <div v-if="fileList.length > 0" class="px-3 py-2 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700' : 'border-gray-200'">
-            <div class="text-xs font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div v-if="fileList.length > 0" class="px-3 py-2 border-b flex-shrink-0 border-gray-200">
+            <div class="text-xs font-medium mb-2 text-gray-700">
               处理结果
             </div>
             <NList bordered size="small">
@@ -472,8 +464,8 @@ onUnmounted(() => {
                 </template>
                 <div class="flex items-center justify-between w-full">
                   <div>
-                    <div class="font-medium text-xs" :class="isDark ? 'text-gray-200' : 'text-gray-700'">{{ result.name }}</div>
-                    <div class="text-xs opacity-70" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                    <div class="font-medium text-xs text-gray-700">{{ result.name }}</div>
+                    <div class="text-xs opacity-70 text-gray-500">
                       {{ result.message }}
                     </div>
                   </div>
@@ -495,8 +487,7 @@ onUnmounted(() => {
               :array-buffer="displayBuffer"
               class="h-full"
             />
-            <div v-else class="h-full flex items-center justify-center"
-                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div v-else class="h-full flex items-center justify-center text-gray-400">
               <div class="text-center text-sm">上传.docx文件后可在此预览</div>
             </div>
           </div>

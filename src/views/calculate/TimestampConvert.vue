@@ -3,9 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { NInput, NButton, NIcon, NFormItem, NForm, NSelect, NSpace, NCard, NGrid, NGi } from 'naive-ui'
 import { TextOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const timestampInput = ref('')
 const timestampUnit = ref<'s' | 'ms'>('s')
@@ -22,9 +20,9 @@ const timestampToDate = () => {
     if (isNaN(date.getTime())) throw new Error('无效的时间戳')
     dateInput.value = formatDate(date)
     timeInput.value = formatTime(date)
-    notification.success({ title: '转换成功', content: '时间戳已转换为日期' })
+    notifySuccess('转换成功', '时间戳已转换为日期')
   } catch (e) {
-    notification.error({ title: '转换失败', content: (e as Error).message })
+    notifyError('转换失败', (e as Error).message)
   }
 }
 
@@ -40,9 +38,9 @@ const dateToTimestamp = () => {
       ? Math.floor(date.getTime() / 1000)
       : date.getTime()
     timestampInput.value = String(ts)
-    notification.success({ title: '转换成功', content: '日期已转换为时间戳' })
+    notifySuccess('转换成功', '日期已转换为时间戳')
   } catch (e) {
-    notification.error({ title: '转换失败', content: (e as Error).message })
+    notifyError('转换失败', (e as Error).message)
   }
 }
 
@@ -90,9 +88,9 @@ const commonTimestamps = computed(() => {
 const copyTimestamp = async (value: number) => {
   try {
     await navigator.clipboard.writeText(String(value))
-    notification.success({ title: '复制成功', content: '时间戳已复制' })
+    notifySuccess('复制成功', '时间戳已复制')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 </script>

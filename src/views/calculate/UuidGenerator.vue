@@ -4,9 +4,7 @@ import { NInputNumber, NButton, NIcon, NFormItem, NForm, NSwitch, NSpace, NCard,
 import { RefreshOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const count = ref(5)
 const uppercase = ref(false)
@@ -34,25 +32,25 @@ const generate = () => {
     result.push(uuid)
   }
   uuids.value = result
-  notification.success({ title: '生成成功', content: `已生成 ${n} 个UUID` })
+  notifySuccess('生成成功', `已生成 ${n} 个UUID`)
 }
 
 const handleCopy = async () => {
   if (uuids.value.length === 0) return
   try {
     await navigator.clipboard.writeText(uuids.value.join('\n'))
-    notification.success({ title: '复制成功', content: '所有UUID已复制' })
+    notifySuccess('复制成功', '所有UUID已复制')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
 const copySingle = async (uuid: string) => {
   try {
     await navigator.clipboard.writeText(uuid)
-    notification.success({ title: '复制成功', content: 'UUID已复制' })
+    notifySuccess('复制成功', 'UUID已复制')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -66,9 +64,9 @@ const handleDownload = async () => {
     a.download = 'uuids.txt'
     a.click()
     URL.revokeObjectURL(url)
-    notification.success({ title: '下载成功', content: '文件已保存' })
+    notifySuccess('下载成功', '文件已保存')
   } catch (e) {
-    notification.error({ title: '下载失败', content: (e as Error).message })
+    notifyError('下载失败', (e as Error).message)
   }
 }
 

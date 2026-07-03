@@ -17,13 +17,9 @@ import {
   ChevronForwardOutline,
   GridOutline
 } from '@vicons/ionicons5'
-import { useTheme } from '../../composables/useTheme'
-
 const router = useRouter()
 const route = useRoute()
 const collapsed = ref(false)
-const { isDark } = useTheme()
-
 const menuOptions: MenuOption[] = [
   {
     label: '首页',
@@ -193,24 +189,18 @@ const toggleCollapse = () => {
     class="border-r flex flex-col transition-all duration-300 ease-in-out flex-shrink-0"
     :class="[
       collapsed ? 'w-14' : 'w-60',
-      isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+      'bg-white border-gray-200'
     ]"
   >
     <div
-      class="p-3 border-b flex-shrink-0 flex items-center justify-between transition-colors duration-300"
-      :class="isDark ? 'border-gray-700' : 'border-gray-200'"
+      class="p-3 border-b flex-shrink-0 flex items-center justify-between transition-colors duration-300 border-gray-200"
     >
       <h1
         v-if="!collapsed"
-        class="text-base font-bold whitespace-nowrap"
-        :class="isDark ? 'text-blue-400' : 'text-blue-600'"
+        class="text-base font-bold whitespace-nowrap text-blue-600"
       >轻量化办公文档工具箱</h1>
       <button
-        class="p-1.5 rounded transition-colors flex-shrink-0"
-        :class="isDark
-          ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
-          : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
-        "
+        class="p-1.5 rounded transition-colors flex-shrink-0 hover:bg-gray-100 text-gray-500 hover:text-gray-700"
         @click="toggleCollapse"
         :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
       >

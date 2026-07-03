@@ -1,0 +1,63 @@
+{
+  "printers": [
+    "����ΪWPS PDF",
+    "Microsoft XPS Document Writer",
+    "Microsoft Print to PDF",
+    "HPRT N31",
+    "Generic / Text Only",
+    "Fax",
+    "\\\\A888\\HP Laser MFP 111-117"
+  ],
+  "printer_details": [
+    {
+      "name": "Default",
+      "is_network": false,
+      "is_default": false,
+      "status": "Status"
+    },
+    {
+      "name": "FALSE",
+      "is_network": false,
+      "is_default": false,
+      "status": "Unknown"
+    },
+    {
+      "name": "FALSE",
+      "is_network": false,
+      "is_default": false,
+      "status": "Unknown"
+    },
+    {
+      "name": "FALSE",
+      "is_network": false,
+      "is_default": false,
+      "status": "Unknown"
+    },
+    {
+      "name": "FALSE",
+      "is_network": false,
+      "is_default": false,
+      "status": "Unknown"
+    },
+    {
+      "name": "FALSE",
+      "is_network": false,
+      "is_default": false,
+      "status": "Unknown"
+    },
+    {
+      "name": "FALSE",
+      "is_network": false,
+      "is_default": false,
+      "status": "Unknown"
+    },
+    {
+      "name": "TRUE",
+      "is_network": false,
+      "is_default": true,
+      "status": "Unknown"
+    }
+  ],
+  "network_printers": [],
+  "timestamp": 1783071889539
+}

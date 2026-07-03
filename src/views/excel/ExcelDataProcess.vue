@@ -1,19 +1,15 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NCheckbox, NCheckboxGroup, NTag } from 'naive-ui'
 import { TrashOutline, DownloadOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import ExcelPreview from '../../components/common/ExcelPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
 import * as XLSX from 'xlsx'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 const fileName = ref('')
 const fileData = ref<any[][]>([])
@@ -59,50 +55,66 @@ watch([processOptions, fileData], () => {
 }, { deep: true })
 
 const handleFilesSelected = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
-  if (files.length === 0 || !files[0].file) return
+  if (files.length === 0) return
 
-  const file = files[0].file
-  const validExtensions = ['.xlsx', '.xls', '.csv']
-  const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  const fileItem = files[0]
+  const validExtensions = ['xlsx', 'xls', 'csv']
+  const fileExt = fileItem.name.split('.').pop()?.toLowerCase() || ''
 
   if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx, .xls 或 .csv 文件' })
+    notifyError('文件格式错误', '请上传 .xlsx, .xls 或 .csv 文件')
     return
   }
 
-  fileName.value = file.name
+  fileName.value = fileItem.name
 
   try {
-    const arrayBuffer = await file.arrayBuffer()
+    let arrayBuffer: ArrayBuffer
+
+    if (fileItem.file) {
+      arrayBuffer = await fileItem.file.arrayBuffer()
+    } else if (fileItem.path) {
+      const { readFile } = await import('@tauri-apps/plugin-fs')
+      const data = await readFile(fileItem.path)
+      arrayBuffer = data.buffer
+    } else {
+      notifyError('导入失败', '无法读取文件内容')
+      handleClear()
+      return
+    }
+
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })
     const firstSheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[firstSheetName]
 
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
+    const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' })
 
     if (jsonData.length === 0) {
-      notification.error({ title: '文件为空', content: '文件中没有数据' })
+      notifyError('文件为空', '文件中没有数据')
+      handleClear()
       return
     }
 
-    headers.value = (jsonData[0] as string[]).map((h, idx) => h?.toString() || `列${idx + 1}`)
+    headers.value = jsonData[0].map((h: any, idx: number) => h?.toString() || `列${idx + 1}`)
     fileData.value = jsonData.slice(1)
-    processedData.value = [...fileData.value.map(row => [...row])]
+    processedData.value = fileData.value.map(row => [...row])
 
-    notification.success({ title: '导入成功', content: `已导入 ${fileData.value.length} 行数据` })
+    notifySuccess('导入成功', `已导入 ${fileData.value.length} 行数据`)
   } catch (e) {
-    notification.error({ title: '导入失败', content: (e as Error).message })
+    console.error('Import error:', e)
+    notifyError('导入失败', (e as Error).message)
+    handleClear()
   }
 }
 
 const doProcess = (showNotification: boolean) => {
   if (fileData.value.length === 0) {
-    if (showNotification) notification.warning({ title: '无数据', content: '请先导入Excel文件' })
+    if (showNotification) notifyWarning('无数据', '请先导入Excel文件')
     return
   }
 
   if (processOptions.value.length === 0) {
-    if (showNotification) notification.warning({ title: '未选择处理项', content: '请至少选择一项处理选项' })
+    if (showNotification) notifyWarning('未选择处理项', '请至少选择一项处理选项')
     return
   }
 
@@ -186,14 +198,11 @@ const doProcess = (showNotification: boolean) => {
       if (processOptions.value.includes('removeEmptyRows')) {
         stats.push('已删除空行')
       }
-      notification.success({
-        title: '处理完成',
-        content: stats.length > 0 ? stats.join('，') : `处理完成，共 ${data.length} 行数据`
-      })
+      notifySuccess('处理完成', stats.length > 0 ? stats.join('，') : `处理完成，共 ${data.length} 行数据`)
     }
   } catch (e) {
     if (showNotification) {
-      notification.error({ title: '处理失败', content: (e as Error).message })
+      notifyError('处理失败', (e as Error).message)
     }
   } finally {
     isProcessing.value = false
@@ -206,7 +215,7 @@ const handleProcess = () => {
 
 const handleDownload = async () => {
   if (previewMode.value === 'processed' ? processedData.value.length === 0 : fileData.value.length === 0) {
-    notification.warning({ title: '无数据', content: '没有可导出的数据' })
+    notifyWarning('无数据', '没有可导出的数据')
     return
   }
 
@@ -228,10 +237,10 @@ const handleDownload = async () => {
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
       await writeFile(savePath, new Uint8Array(wbout))
 
-      notification.success({ title: '导出成功', content: `文件已保存至: ${savePath}` })
+      notifySuccess('导出成功', `文件已保存至: ${savePath}`)
     }
   } catch (e) {
-    notification.error({ title: '导出失败', content: (e as Error).message })
+    notifyError('导出失败', (e as Error).message)
   }
 }
 
@@ -257,7 +266,7 @@ const previewData = computed(() => {
     <template #input>
       <div class="space-y-4 h-full flex flex-col">
         <div class="flex-shrink-0">
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Excel文件
           </div>
           <FileDropZone
@@ -270,9 +279,9 @@ const previewData = computed(() => {
 
         <div class="flex-shrink-0">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">处理选项</div>
+            <div class="text-sm font-medium text-gray-700">处理选项</div>
             <div class="flex items-center gap-2">
-              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+              <span class="text-xs text-gray-500">实时预览</span>
               <label class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" v-model="realtimePreview" class="sr-only peer" />
                 <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
@@ -308,7 +317,7 @@ const previewData = computed(() => {
 
         <div v-if="fileName" class="flex items-center gap-2 flex-shrink-0">
           <NTag size="small" type="info">{{ fileName }}</NTag>
-          <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">共 {{ fileData.length }} 行</span>
+          <span class="text-xs text-gray-500">共 {{ fileData.length }} 行</span>
         </div>
       </div>
     </template>
@@ -321,8 +330,7 @@ const previewData = computed(() => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -360,8 +368,7 @@ const previewData = computed(() => {
               :data="previewData"
               class="h-full"
             />
-            <div v-else class="h-full flex items-center justify-center"
-                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div v-else class="h-full flex items-center justify-center text-gray-400">
               <div class="text-center text-sm">上传Excel文件后可在此预览</div>
             </div>
           </div>

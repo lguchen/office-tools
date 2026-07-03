@@ -1,19 +1,15 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NRadioGroup, NRadio, NInput, NInputNumber, NSpace, NTag, NSelect } from 'naive-ui'
 import { CloudUploadOutline, DownloadOutline, CheckmarkCircleOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import ExcelPreview from '../../components/common/ExcelPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
 import * as XLSX from 'xlsx'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 // 文件数据
 const fileName = ref('')
@@ -50,39 +46,47 @@ const validationOptions = [
 
 // 文件上传处理
 const handleFileUpload = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  if (files.length === 0) return
   const fileInfo = files[0]
-  const file = fileInfo?.file
-  if (!file) return
 
-  const validExtensions = ['.xlsx', '.xls', '.csv']
-  const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  const validExtensions = ['xlsx', 'xls', 'csv']
+  const fileExt = fileInfo.name.split('.').pop()?.toLowerCase() || ''
 
   if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx、.xls 或 .csv 文件' })
+    notifyError('文件格式错误', '请上传 .xlsx、.xls 或 .csv 文件')
     return
   }
 
-  fileName.value = file.name
+  fileName.value = fileInfo.name
 
   try {
-    const arrayBuffer = await file.arrayBuffer()
+    let arrayBuffer: ArrayBuffer
+    if (fileInfo.file) {
+      arrayBuffer = await fileInfo.file.arrayBuffer()
+    } else if (fileInfo.path) {
+      const { readFile } = await import('@tauri-apps/plugin-fs')
+      const data = await readFile(fileInfo.path)
+      arrayBuffer = data.buffer
+    } else {
+      notifyError('导入失败', '无法读取文件内容')
+      return
+    }
+
     fileArrayBuffer.value = arrayBuffer
     const wb = XLSX.read(arrayBuffer, { type: 'array' })
     workbook.value = wb
 
-    notification.success({
-      title: '导入成功',
-      content: `已导入文件，包含 ${wb.SheetNames.length} 个工作表`
-    })
+    notifySuccess('导入成功', `已导入文件，包含 ${wb.SheetNames.length} 个工作表`)
   } catch (e) {
-    notification.error({ title: '导入失败', content: (e as Error).message })
+    console.error('Data validation upload error:', e)
+    notifyError('导入失败', (e as Error).message)
   }
 }
 
 // 导出带数据验证的Excel
 const handleExport = async () => {
   if (!workbook.value) {
-    notification.warning({ title: '无文件', content: '请先上传Excel文件' })
+    notifyWarning('无文件', '请先上传Excel文件')
     return
   }
 
@@ -129,13 +133,10 @@ const handleExport = async () => {
       const wbout = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' })
       await writeFile(savePath, new Uint8Array(wbout))
 
-      notification.success({
-        title: '导出成功',
-        content: `文件已保存至: ${savePath}\n注意：数据验证功能需要xlsx-js-style库支持才能在Excel中生效`
-      })
+      notifySuccess('导出成功', `文件已保存至: ${savePath}\n注意：数据验证功能需要xlsx-js-style库支持才能在Excel中生效`)
     }
   } catch (e) {
-    notification.error({ title: '导出失败', content: (e as Error).message })
+    notifyError('导出失败', (e as Error).message)
   }
 }
 
@@ -219,7 +220,7 @@ const validationDescription = computed(() => {
       <div class="space-y-4 h-full flex flex-col">
         <!-- 数据验证类型选择 -->
         <div class="flex-shrink-0">
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             选择数据验证类型
           </div>
           <NSelect
@@ -233,7 +234,7 @@ const validationDescription = computed(() => {
         <div class="flex-shrink-0">
           <!-- 整数/小数范围 -->
           <div v-if="selectedValidation === 'integer' || selectedValidation === 'decimal'" class="space-y-2">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               数值范围
             </div>
             <div class="flex gap-2 items-center">
@@ -242,7 +243,7 @@ const validationDescription = computed(() => {
                 placeholder="最小值"
                 size="small"
               />
-              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">至</span>
+              <span class="text-gray-500">至</span>
               <NInputNumber
                 v-model:value="maxValue"
                 placeholder="最大值"
@@ -253,7 +254,7 @@ const validationDescription = computed(() => {
 
           <!-- 文本长度限制 -->
           <div v-if="selectedValidation === 'textLength'" class="space-y-2">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               文本长度范围
             </div>
             <div class="flex gap-2 items-center">
@@ -263,7 +264,7 @@ const validationDescription = computed(() => {
                 size="small"
                 :min="0"
               />
-              <span :class="isDark ? 'text-gray-400' : 'text-gray-500'">至</span>
+              <span class="text-gray-500">至</span>
               <NInputNumber
                 v-model:value="maxLength"
                 placeholder="最大长度"
@@ -275,7 +276,7 @@ const validationDescription = computed(() => {
 
           <!-- 下拉列表选项 -->
           <div v-if="selectedValidation === 'list'" class="space-y-2">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               下拉列表选项（用逗号分隔）
             </div>
             <NInput
@@ -287,7 +288,7 @@ const validationDescription = computed(() => {
 
           <!-- 目标单元格范围 -->
           <div class="mt-4 space-y-2">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               目标单元格范围
             </div>
             <NInput
@@ -299,7 +300,7 @@ const validationDescription = computed(() => {
 
           <!-- 错误提示设置 -->
           <div class="mt-4 space-y-2">
-            <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div class="text-sm mb-1 text-gray-500">
               错误提示设置
             </div>
             <NInput
@@ -352,8 +353,7 @@ const validationDescription = computed(() => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NTag v-if="fileName" size="small" type="info">{{ fileName }}</NTag>
             <div class="flex-1"></div>
             <NButton
@@ -374,8 +374,7 @@ const validationDescription = computed(() => {
               :array-buffer="fileArrayBuffer"
               class="h-full"
             />
-            <div v-else class="h-full flex items-center justify-center"
-                 :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+            <div v-else class="h-full flex items-center justify-center text-gray-400">
               <div class="text-center text-sm">
                 <NIcon :size="48" class="mb-2 opacity-50">
                   <CheckmarkCircleOutline />

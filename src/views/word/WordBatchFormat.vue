@@ -6,7 +6,6 @@
 -->
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NInput,
@@ -22,9 +21,9 @@ import {
   NSwitch,
   NInputNumber,
   NColorPicker,
-  NAlert,
-  useNotification
+  NAlert
 } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import {
   Document,
   Packer,
@@ -52,9 +51,6 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 // 上传的文件列表
 const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
@@ -131,13 +127,13 @@ const handleFilesSelected = async (files: { name: string; path: string; size?: n
 // 执行批量处理
 const handleProcess = async () => {
   if (fileList.value.length === 0) {
-    notification.warning({ title: '提示', content: '请先上传Word文档' })
+    notifyWarning('提示', '请先上传Word文档')
     return
   }
 
   const validFiles = fileList.value.filter(f => f.file)
   if (validFiles.length === 0) {
-    notification.warning({ title: '提示', content: '没有有效的文件' })
+    notifyWarning('提示', '没有有效的文件')
     return
   }
 
@@ -173,14 +169,14 @@ const handleProcess = async () => {
       }
     }
 
-    notification.success({ title: '处理完成', content: '所有文件格式化成功' })
+    notifySuccess('处理完成', '所有文件格式化成功')
 
     await nextTick()
     if (isDetached.value && detachableRef.value) {
       detachableRef.value.syncContent()
     }
   } catch (error) {
-    notification.error({ title: '处理失败', content: (error as Error).message })
+    notifyError('处理失败', (error as Error).message)
     processResults.value.forEach((r, i) => {
       if (r.status === 'pending') {
         processResults.value[i] = { ...r, status: 'error', message: '处理失败' }
@@ -227,7 +223,7 @@ const handleDownload = async (index: number) => {
     a.click()
     URL.revokeObjectURL(url)
   } catch (err) {
-    notification.error({ title: '下载失败', content: (err as Error).message })
+    notifyError('下载失败', (err as Error).message)
   }
 }
 
@@ -301,7 +297,7 @@ onUnmounted(() => {
       <div class="space-y-4">
         <!-- 文件上传 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Word文档
           </div>
           <FileDropZone
@@ -315,30 +311,30 @@ onUnmounted(() => {
 
         <!-- 字体格式设置 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             字体格式
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">字体名称</div>
+              <div class="text-xs mb-1 text-gray-500">字体名称</div>
               <NSelect v-model:value="fontSettings.fontFamily" :options="fontOptions" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">字体大小</div>
+              <div class="text-xs mb-1 text-gray-500">字体大小</div>
               <NInputNumber v-model:value="fontSettings.fontSize" :min="8" :max="72" suffix="pt" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">字体颜色</div>
+              <div class="text-xs mb-1 text-gray-500">字体颜色</div>
               <NColorPicker v-model:value="fontSettings.fontColor" :modes="['hex']" />
             </div>
             <div class="flex items-end gap-3">
               <div class="flex items-center gap-2">
                 <NSwitch v-model:value="fontSettings.bold" size="small" />
-                <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">加粗</span>
+                <span class="text-xs text-gray-500">加粗</span>
               </div>
               <div class="flex items-center gap-2">
                 <NSwitch v-model:value="fontSettings.italic" size="small" />
-                <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">斜体</span>
+                <span class="text-xs text-gray-500">斜体</span>
               </div>
             </div>
           </div>
@@ -348,36 +344,36 @@ onUnmounted(() => {
 
         <!-- 段落格式设置 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             段落格式
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">对齐方式</div>
+              <div class="text-xs mb-1 text-gray-500">对齐方式</div>
               <NSelect v-model:value="paragraphSettings.alignment" :options="alignmentOptions" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">行间距</div>
+              <div class="text-xs mb-1 text-gray-500">行间距</div>
               <NInputNumber v-model:value="paragraphSettings.lineHeight" :min="1" :max="3" :step="0.1" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">段前间距(磅)</div>
+              <div class="text-xs mb-1 text-gray-500">段前间距(磅)</div>
               <NInputNumber v-model:value="paragraphSettings.spaceBefore" :min="0" :max="100" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">段后间距(磅)</div>
+              <div class="text-xs mb-1 text-gray-500">段后间距(磅)</div>
               <NInputNumber v-model:value="paragraphSettings.spaceAfter" :min="0" :max="100" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">左缩进(英寸)</div>
+              <div class="text-xs mb-1 text-gray-500">左缩进(英寸)</div>
               <NInputNumber v-model:value="paragraphSettings.indentLeft" :min="0" :max="10" :step="0.1" />
             </div>
             <div>
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">右缩进(英寸)</div>
+              <div class="text-xs mb-1 text-gray-500">右缩进(英寸)</div>
               <NInputNumber v-model:value="paragraphSettings.indentRight" :min="0" :max="10" :step="0.1" />
             </div>
             <div class="col-span-2">
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">首行缩进(英寸)</div>
+              <div class="text-xs mb-1 text-gray-500">首行缩进(英寸)</div>
               <NInputNumber v-model:value="paragraphSettings.indentFirstLine" :min="0" :max="10" :step="0.1" />
             </div>
           </div>
@@ -408,8 +404,7 @@ onUnmounted(() => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NButton
               size="small"
               :type="previewMode === 'original' ? 'primary' : 'default'"
@@ -428,7 +423,7 @@ onUnmounted(() => {
             </NButton>
             <div class="flex-1"></div>
             <div class="flex items-center gap-2">
-              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">实时预览</span>
+              <span class="text-xs text-gray-500">实时预览</span>
               <NSwitch v-model:value="realtimePreview" size="small" />
             </div>
           </div>
@@ -440,16 +435,14 @@ onUnmounted(() => {
                 :array-buffer="displayBuffer"
                 class="h-full"
               />
-              <div v-else class="h-full flex items-center justify-center"
-                   :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+              <div v-else class="h-full flex items-center justify-center text-gray-400">
                 <div class="text-center text-sm">上传.docx文件后可在此预览</div>
               </div>
             </div>
 
-            <div v-if="fileList.length > 0" class="border-t flex-shrink-0"
-                 :class="isDark ? 'border-gray-700' : 'border-gray-200'">
+            <div v-if="fileList.length > 0" class="border-t flex-shrink-0 border-gray-200">
               <div class="flex items-center justify-between px-3 py-2">
-                <div class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+                <div class="text-sm font-medium text-gray-700">
                   处理结果
                 </div>
                 <NButton
@@ -473,8 +466,8 @@ onUnmounted(() => {
                     </template>
                     <div class="flex items-center justify-between w-full">
                       <div>
-                        <div class="font-medium text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-700'">{{ result.name }}</div>
-                        <div class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                        <div class="font-medium text-sm text-gray-700">{{ result.name }}</div>
+                        <div class="text-xs text-gray-500">
                           {{ result.message }}
                         </div>
                       </div>

@@ -1,13 +1,9 @@
 ﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NInput, NCard, NTag, NButton, NIcon, NMenu, NScrollbar } from 'naive-ui'
 import { SearchOutline, CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
 import { wordShortcuts, wordShortcutCategories } from '../../data/wordShortcuts'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
-const { isDark } = useTheme()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 // 搜索关键词
 const searchQuery = ref('')
@@ -43,12 +39,12 @@ const handleCopy = async (keys: string) => {
   try {
     await navigator.clipboard.writeText(keys)
     copiedKey.value = keys
-    notification.success({ title: '复制成功', content: `${keys} 已复制到剪贴板`, duration: 1500 })
+    notifySuccess('复制成功', `${keys} 已复制到剪贴板`)
     setTimeout(() => {
       copiedKey.value = null
     }, 2000)
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 
@@ -74,8 +70,8 @@ const handleMenuSelect = (key: string) => {
   <div class="h-full flex flex-col p-4">
     <!-- 标题 -->
     <div class="mb-4 flex-shrink-0">
-      <h2 class="text-xl font-bold" :class="isDark ? 'text-blue-400' : 'text-blue-600'">Word快捷键查询</h2>
-      <p class="mt-1 text-sm" :class="isDark ? 'text-gray-400' : 'text-gray-500'">快速查找Word常用快捷键</p>
+      <h2 class="text-xl font-bold text-blue-600">Word快捷键查询</h2>
+      <p class="mt-1 text-sm text-gray-500">快速查找Word常用快捷键</p>
     </div>
 
     <!-- 搜索框 -->
@@ -95,11 +91,9 @@ const handleMenuSelect = (key: string) => {
     <!-- 主体内容 -->
     <div class="flex-1 flex gap-4 min-h-0">
       <!-- 左侧分类导航 -->
-      <div class="w-48 flex-shrink-0 rounded-lg border overflow-hidden"
-        :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+      <div class="w-48 flex-shrink-0 rounded-lg border overflow-hidden bg-white border-gray-200"
       >
-        <div class="px-4 py-2 border-b font-medium"
-          :class="isDark ? 'border-gray-700 text-gray-200' : 'border-gray-200 text-gray-700'"
+        <div class="px-4 py-2 border-b font-medium border-gray-200 text-gray-700"
         >
           分类
         </div>
@@ -108,26 +102,24 @@ const handleMenuSelect = (key: string) => {
             :options="menuOptions"
             :value="selectedCategory || 'all'"
             @update:value="handleMenuSelect"
-            :inverted="isDark"
+            :inverted="false"
           />
         </NScrollbar>
       </div>
 
       <!-- 右侧快捷键列表 -->
-      <div class="flex-1 min-h-0 rounded-lg border overflow-hidden"
-        :class="isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+      <div class="flex-1 min-h-0 rounded-lg border overflow-hidden bg-white border-gray-200"
       >
-        <div class="px-4 py-2 border-b font-medium"
-          :class="isDark ? 'border-gray-700 text-gray-200' : 'border-gray-200 text-gray-700'"
+        <div class="px-4 py-2 border-b font-medium border-gray-200 text-gray-700"
         >
           快捷键列表
-          <span class="ml-2 text-sm font-normal" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+          <span class="ml-2 text-sm font-normal text-gray-500">
             共 {{ filteredShortcuts.length }} 条
           </span>
         </div>
         <NScrollbar class="h-[calc(100%-40px)]">
           <div class="p-4">
-            <div v-if="filteredShortcuts.length === 0" class="text-center py-8" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div v-if="filteredShortcuts.length === 0" class="text-center py-8 text-gray-500">
               没有找到匹配的快捷键
             </div>
             <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -136,8 +128,7 @@ const handleMenuSelect = (key: string) => {
                 :key="shortcut.keys + shortcut.description"
                 size="small"
                 hoverable
-                class="cursor-pointer transition-all"
-                :class="isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'"
+                class="cursor-pointer transition-all bg-gray-50 hover:bg-gray-100"
                 @click="handleCopy(shortcut.keys)"
               >
                 <div class="flex items-start gap-3">
@@ -158,10 +149,10 @@ const handleMenuSelect = (key: string) => {
                   </div>
                   <!-- 描述 -->
                   <div class="flex-1 min-w-0">
-                    <div class="font-medium text-sm" :class="isDark ? 'text-gray-200' : 'text-gray-800'">
+                    <div class="font-medium text-sm text-gray-800">
                       {{ shortcut.description }}
                     </div>
-                    <div v-if="shortcut.tip" class="mt-1 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+                    <div v-if="shortcut.tip" class="mt-1 text-xs text-gray-500">
                       💡 {{ shortcut.tip }}
                     </div>
                   </div>
@@ -170,7 +161,7 @@ const handleMenuSelect = (key: string) => {
                     <NIcon v-if="copiedKey === shortcut.keys" :size="18" class="text-green-500">
                       <CheckmarkOutline />
                     </NIcon>
-                    <NIcon v-else :size="18" :class="isDark ? 'text-gray-400' : 'text-gray-400'">
+                    <NIcon v-else :size="18" class="text-gray-400">
                       <CopyOutline />
                     </NIcon>
                   </div>

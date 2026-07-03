@@ -1,6 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import { NButton, NIcon, NRadioGroup, NRadio, NInputNumber, NSpace, NTag, NDataTable, NScrollbar, NProgress, NSelect } from 'naive-ui'
 import { CutOutline, GitMergeOutline, CloudUploadOutline, DownloadOutline, TrashOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
@@ -8,13 +7,10 @@ import ActionBar from '../../components/common/ActionBar.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import ExcelPreview from '../../components/common/ExcelPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-import { useNotification } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs'
 import * as XLSX from 'xlsx'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 // 模式切换
 const mode = ref<'split' | 'merge'>('split')
@@ -77,70 +73,82 @@ const outputColumns = [
 
 // 上传Excel文件（拆分模式）
 const handleSplitUpload = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
+  if (files.length === 0) return
   const fileInfo = files[0]
-  const file = fileInfo?.file
-  if (!file) return
 
-  const validExtensions = ['.xlsx', '.xls', '.csv']
-  const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  const validExtensions = ['xlsx', 'xls', 'csv']
+  const fileExt = fileInfo.name.split('.').pop()?.toLowerCase() || ''
 
   if (!validExtensions.includes(fileExt)) {
-    notification.error({ title: '文件格式错误', content: '请上传 .xlsx、.xls 或 .csv 文件' })
+    notifyError('文件格式错误', '请上传 .xlsx、.xls 或 .csv 文件')
     return
   }
 
-  splitFileName.value = file.name
+  splitFileName.value = fileInfo.name
 
   try {
-    const arrayBuffer = await file.arrayBuffer()
+    let arrayBuffer: ArrayBuffer
+    if (fileInfo.file) {
+      arrayBuffer = await fileInfo.file.arrayBuffer()
+    } else if (fileInfo.path) {
+      const { readFile } = await import('@tauri-apps/plugin-fs')
+      const data = await readFile(fileInfo.path)
+      arrayBuffer = data.buffer
+    } else {
+      notifyError('导入失败', '无法读取文件内容')
+      return
+    }
+
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })
     splitWorkbook.value = workbook
     splitSheets.value = workbook.SheetNames
 
-    notification.success({
-      title: '导入成功',
-      content: `已导入文件，包含 ${splitSheets.value.length} 个工作表`
-    })
+    notifySuccess('导入成功', `已导入文件，包含 ${splitSheets.value.length} 个工作表`)
   } catch (e) {
-    notification.error({ title: '导入失败', content: (e as Error).message })
+    console.error('Split upload error:', e)
+    notifyError('导入失败', (e as Error).message)
   }
 }
 
 // 上传Excel文件（合并模式）
 const handleMergeUpload = async (files: { name: string; path: string; size?: number; file?: File }[]) => {
-  const validExtensions = ['.xlsx', '.xls', '.csv']
+  const validExtensions = ['xlsx', 'xls', 'csv']
 
   for (const fileInfo of files) {
-    const file = fileInfo.file
-    if (!file) continue
-
-    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+    const fileExt = fileInfo.name.split('.').pop()?.toLowerCase() || ''
 
     if (!validExtensions.includes(fileExt)) {
-      notification.error({ title: '文件格式错误', content: '请上传 .xlsx、.xls 或 .csv 文件' })
+      notifyError('文件格式错误', '请上传 .xlsx、.xls 或 .csv 文件')
       continue
     }
 
-    // 检查是否已存在同名文件
-    if (mergeFiles.value.some(f => f.name === file.name)) {
-      notification.warning({ title: '文件已存在', content: `${file.name} 已添加` })
+    if (mergeFiles.value.some(f => f.name === fileInfo.name)) {
+      notifyWarning('文件已存在', `${fileInfo.name} 已添加`)
       continue
     }
 
     try {
-      const arrayBuffer = await file.arrayBuffer()
+      let arrayBuffer: ArrayBuffer
+      if (fileInfo.file) {
+        arrayBuffer = await fileInfo.file.arrayBuffer()
+      } else if (fileInfo.path) {
+        const { readFile } = await import('@tauri-apps/plugin-fs')
+        const data = await readFile(fileInfo.path)
+        arrayBuffer = data.buffer
+      } else {
+        continue
+      }
+
       const workbook = XLSX.read(arrayBuffer, { type: 'array' })
       mergeFiles.value.push({
-        name: file.name,
+        name: fileInfo.name,
         workbook
       })
 
-      notification.success({
-        title: '添加成功',
-        content: `已添加 ${file.name}`
-      })
+      notifySuccess('添加成功', `已添加 ${fileInfo.name}`)
     } catch (e) {
-      notification.error({ title: '导入失败', content: (e as Error).message })
+      console.error('Merge upload error:', e)
+      notifyError('导入失败', (e as Error).message)
     }
   }
 }
@@ -148,7 +156,7 @@ const handleMergeUpload = async (files: { name: string; path: string; size?: num
 // 执行拆分
 const handleSplit = async () => {
   if (!splitWorkbook.value) {
-    notification.warning({ title: '无文件', content: '请先上传Excel文件' })
+    notifyWarning('无文件', '请先上传Excel文件')
     return
   }
 
@@ -204,10 +212,7 @@ const handleSplit = async () => {
         progress.value = Math.round(((i + 1) / totalSheets) * 100)
       }
 
-      notification.success({
-        title: '拆分完成',
-        content: `已拆分为 ${outputFiles.value.length} 个文件`
-      })
+      notifySuccess('拆分完成', `已拆分为 ${outputFiles.value.length} 个文件`)
     } else {
       // 按行数拆分
       const firstSheetName = wb.SheetNames[0]
@@ -217,7 +222,7 @@ const handleSplit = async () => {
       const rowsPerFile = splitRowCount.value
 
       if (rowsPerFile <= 0 || rowsPerFile >= totalRows) {
-        notification.warning({ title: '行数无效', content: '请输入有效的拆分行数' })
+        notifyWarning('行数无效', '请输入有效的拆分行数')
         return
       }
 
@@ -265,13 +270,10 @@ const handleSplit = async () => {
         progress.value = Math.round(((i + 1) / fileCount) * 100)
       }
 
-      notification.success({
-        title: '拆分完成',
-        content: `已将 ${totalRows - 1} 行数据拆分为 ${outputFiles.value.length} 个文件`
-      })
+      notifySuccess('拆分完成', `已将 ${totalRows - 1} 行数据拆分为 ${outputFiles.value.length} 个文件`)
     }
   } catch (e) {
-    notification.error({ title: '拆分失败', content: (e as Error).message })
+    notifyError('拆分失败', (e as Error).message)
   } finally {
     isProcessing.value = false
     progress.value = 100
@@ -282,7 +284,7 @@ const handleSplit = async () => {
 // 执行合并
 const handleMerge = async () => {
   if (mergeFiles.value.length < 2) {
-    notification.warning({ title: '文件不足', content: '请至少上传2个Excel文件' })
+    notifyWarning('文件不足', '请至少上传2个Excel文件')
     return
   }
 
@@ -343,10 +345,7 @@ const handleMerge = async () => {
           workbook: mergedWb
         }]
 
-        notification.success({
-          title: '合并完成',
-          content: `已合并 ${mergeFiles.value.length} 个文件，共 ${allData.length - 1} 行数据`
-        })
+        notifySuccess('合并完成', `已合并 ${mergeFiles.value.length} 个文件，共 ${allData.length - 1} 行数据`)
       }
     } else {
       // 合并到不同Sheet
@@ -386,16 +385,13 @@ const handleMerge = async () => {
           workbook: mergedWb
         }]
 
-        notification.success({
-          title: '合并完成',
-          content: `已合并 ${mergeFiles.value.length} 个文件到 ${mergedWb.SheetNames.length} 个工作表`
-        })
+        notifySuccess('合并完成', `已合并 ${mergeFiles.value.length} 个文件到 ${mergedWb.SheetNames.length} 个工作表`)
       }
     }
 
     progress.value = 100
   } catch (e) {
-    notification.error({ title: '合并失败', content: (e as Error).message })
+    notifyError('合并失败', (e as Error).message)
   } finally {
     isProcessing.value = false
     progressText.value = ''
@@ -423,7 +419,7 @@ const handleClear = () => {
       <div class="space-y-4 h-full flex flex-col">
         <!-- 模式切换 -->
         <div class="flex-shrink-0">
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             选择模式
           </div>
           <NRadioGroup v-model:value="mode">
@@ -448,7 +444,7 @@ const handleClear = () => {
         <div v-if="mode === 'split'" class="flex-1 flex flex-col">
           <!-- 拆分方式选择 -->
           <div class="mb-4">
-            <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            <div class="text-sm font-medium mb-2 text-gray-700">
               拆分方式
             </div>
             <NRadioGroup v-model:value="splitMethod">
@@ -461,7 +457,7 @@ const handleClear = () => {
 
           <!-- 按行数拆分的参数 -->
           <div v-if="splitMethod === 'rows'" class="mb-4">
-            <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            <div class="text-sm font-medium mb-2 text-gray-700">
               每个文件行数
             </div>
             <NInputNumber
@@ -509,7 +505,7 @@ const handleClear = () => {
         <div v-else class="flex-1 flex flex-col">
           <!-- 合并方式选择 -->
           <div class="mb-4">
-            <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            <div class="text-sm font-medium mb-2 text-gray-700">
               合并方式
             </div>
             <NRadioGroup v-model:value="mergeMethod">
@@ -565,8 +561,7 @@ const handleClear = () => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div v-if="isProcessing" class="px-3 py-2 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div v-if="isProcessing" class="px-3 py-2 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <NProgress
               type="line"
               :percentage="progress"
@@ -580,9 +575,8 @@ const handleClear = () => {
           </div>
 
           <div v-if="previewWorkbooks.length > 0" class="flex-1 min-h-0 flex flex-col">
-            <div v-if="previewWorkbooks.length > 1" class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
-                 :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
-              <span class="text-sm" :class="isDark ? 'text-gray-300' : 'text-gray-700'">文件：</span>
+            <div v-if="previewWorkbooks.length > 1" class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0 border-gray-200 bg-gray-50">
+              <span class="text-sm text-gray-700">文件：</span>
               <NSelect
                 :value="currentPreviewIndex"
                 :options="previewWorkbooks.map((wb, idx) => ({ label: wb.name, value: idx }))"
@@ -602,8 +596,7 @@ const handleClear = () => {
             </div>
           </div>
 
-          <div v-else class="flex-1 flex items-center justify-center"
-               :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+          <div v-else class="flex-1 flex items-center justify-center text-gray-400">
             <div class="text-center text-sm">
               <NIcon :size="48" class="mb-2 opacity-50">
                 <DownloadOutline />

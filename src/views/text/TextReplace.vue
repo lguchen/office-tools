@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NRadioGroup, NRadio, NSwitch, NFormItem, NForm 
 import { SwapHorizontalOutline, RefreshOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -42,9 +40,9 @@ const handleReplace = () => {
         outputText.value = inputText.value.split(searchText.value).join(replaceText.value)
       }
     }
-    notification.success({ title: '替换成功', content: '文本已完成替换' })
+    notifySuccess('替换成功', '文本已完成替换')
   } catch (e) {
-    notification.error({ title: '替换失败', content: (e as Error).message })
+    notifyError('替换失败', (e as Error).message)
   }
 }
 
@@ -52,9 +50,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

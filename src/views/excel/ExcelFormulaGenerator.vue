@@ -4,10 +4,7 @@ import { useTheme } from '../../composables/useTheme'
 import { NSelect, NRadioGroup, NRadio, NInput, NButton, NIcon, NCard, NSpace, NInputGroup, NInputGroupLabel } from 'naive-ui'
 import { CopyOutline, RefreshOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
-const { isDark } = useTheme()
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 
 // 公式类型定义
 interface FormulaType {
@@ -309,15 +306,15 @@ watch(selectedFormula, () => {
 // 复制公式到剪贴板
 const handleCopy = async () => {
   if (!generatedFormula.value) {
-    notification.warning({ title: '无法复制', content: '请先完整填写参数' })
+    notifyWarning('无法复制', '请先完整填写参数')
     return
   }
 
   try {
     await navigator.clipboard.writeText(generatedFormula.value)
-    notification.success({ title: '复制成功', content: '公式已复制到剪贴板' })
+    notifySuccess('复制成功', '公式已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: '请手动复制公式' })
+    notifyError('复制失败', '请手动复制公式')
   }
 }
 
@@ -347,7 +344,7 @@ const handleReset = () => {
       <div class="space-y-4">
         <!-- 公式类型选择 -->
         <div>
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             选择公式类型
           </div>
           <NSelect
@@ -359,7 +356,7 @@ const handleReset = () => {
 
         <!-- 参数输入区 -->
         <div v-if="currentFormulaInfo">
-          <div class="text-sm font-medium mb-3" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-3 text-gray-700">
             参数设置
           </div>
           <div class="space-y-3">
@@ -468,7 +465,7 @@ const handleReset = () => {
             </div>
 
             <div v-if="currentFormulaInfo.params.includes('rangeLookup')">
-              <div class="text-sm mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+              <div class="text-sm mb-1 text-gray-500">
                 {{ paramLabels.rangeLookup }}
               </div>
               <NRadioGroup v-model:value="params.rangeLookup">
@@ -537,7 +534,7 @@ const handleReset = () => {
       <div class="space-y-4 h-full flex flex-col">
         <!-- 生成的公式 -->
         <div>
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             生成的公式
           </div>
           <NInput
@@ -547,7 +544,7 @@ const handleReset = () => {
             :style="{
               fontFamily: 'Consolas, Monaco, monospace',
               fontSize: '16px',
-              backgroundColor: isDark ? '#1f2937' : '#f9fafb'
+              backgroundColor: '#f9fafb'
             }"
             :class="{ 'text-blue-500': generatedFormula }"
           />
@@ -555,43 +552,38 @@ const handleReset = () => {
 
         <!-- 公式解释 -->
         <div class="flex-1">
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             公式说明
           </div>
           <div
-            class="p-4 rounded-lg text-sm leading-relaxed"
-            :class="isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-600'"
+            class="p-4 rounded-lg text-sm leading-relaxed bg-gray-50 text-gray-600"
             v-html="formulaExplanation.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')"
           />
         </div>
 
         <!-- 快捷参考 -->
         <div>
-          <div class="text-sm font-medium mb-2" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="text-sm font-medium mb-2 text-gray-700">
             快捷参考
           </div>
           <div class="grid grid-cols-2 gap-2 text-xs">
             <div
-              class="p-2 rounded"
-              :class="isDark ? 'bg-gray-700' : 'bg-gray-50'"
+              class="p-2 rounded bg-gray-50"
             >
               <span class="font-medium">单元格引用:</span> A1, B2:C10
             </div>
             <div
-              class="p-2 rounded"
-              :class="isDark ? 'bg-gray-700' : 'bg-gray-50'"
+              class="p-2 rounded bg-gray-50"
             >
               <span class="font-medium">比较运算:</span> >, <, >=, <=, =, <>
             </div>
             <div
-              class="p-2 rounded"
-              :class="isDark ? 'bg-gray-700' : 'bg-gray-50'"
+              class="p-2 rounded bg-gray-50"
             >
               <span class="font-medium">文本:</span> 用双引号包裹
             </div>
             <div
-              class="p-2 rounded"
-              :class="isDark ? 'bg-gray-700' : 'bg-gray-50'"
+              class="p-2 rounded bg-gray-50"
             >
               <span class="font-medium">绝对引用:</span> $A$1, $B$1:$B$10
             </div>

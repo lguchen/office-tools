@@ -1,10 +1,11 @@
-﻿<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useTheme } from '../../composables/useTheme'
+import { useSettings } from '../../composables/useSettings'
 import {
   NButton, NIcon, NFormItem, NForm, NSelect,
   NInputNumber, NRadioGroup, NRadioButton, NCard, NDivider, NSpin,
-  NButtonGroup, NSpace, NCheckbox, NInput, NTabs, NTabPane, NTag,
+  NButtonGroup, NSpace, NCheckbox, NCheckboxGroup, NInput, NTabs, NTabPane, NTag,
   NModal, NList, NListItem, NThing
 } from 'naive-ui'
 import {
@@ -14,11 +15,9 @@ import {
   RefreshOutline, WarningOutline
 } from '@vicons/ionicons5'
 import PrintPreview from '../../components/print/PrintPreview.vue'
-import { useNotification } from 'naive-ui'
 import { invoke } from '@tauri-apps/api/core'
-
-const notification = useNotification()
-const { isDark } = useTheme()
+import { notifySuccess, notifyError, notifyInfo } from '../../composables/useNotification'
+import * as XLSX from 'xlsx'
 
 interface PrintFile {
   id: string
@@ -55,17 +54,24 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const printPreviewRef = ref<InstanceType<typeof PrintPreview> | null>(null)
 const currentSelection = ref<any>(null)
 
-const copies = ref(1)
-const printOrder = ref<'sequential' | 'collated'>('collated')
-const paperSize = ref('A4')
-const orientation = ref<'portrait' | 'landscape'>('portrait')
-const printSides = ref('simplex')
-const printRange = ref('all')
-const pageFrom = ref(1)
-const pageTo = ref(1)
-const printColor = ref<'color' | 'monochrome'>('color')
+const excelSheetNames = ref<string[]>([])
+const selectedSheets = ref<string[]>([])
+const showSheetSelector = ref(false)
+const hasLibreOffice = ref(false)
 
-const pagesPerSheet = ref(1)
+const { settings, loadSettings, saveSettings } = useSettings()
+
+const copies = ref(settings.copies)
+const printOrder = ref<'sequential' | 'collated'>(settings.printOrder)
+const paperSize = ref(settings.paperSize)
+const orientation = ref<'portrait' | 'landscape'>(settings.orientation)
+const printSides = ref(settings.printSides)
+const printRange = ref(settings.printRange)
+const pageFrom = ref(settings.pageFrom)
+const pageTo = ref(settings.pageTo)
+const printColor = ref<'color' | 'monochrome'>(settings.printColor)
+
+const pagesPerSheet = ref(settings.pagesPerSheet)
 const pagesPerSheetOptions = [
   { label: '1版', value: 1, icon: '1' },
   { label: '2版', value: 2, icon: '2' },
@@ -74,8 +80,8 @@ const pagesPerSheetOptions = [
   { label: '更多', value: 0, icon: '...' },
 ]
 
-const scaling = ref('none')
-const scalePercent = ref(100)
+const scaling = ref(settings.scaling)
+const scalePercent = ref(settings.scalePercent)
 const scalingOptions = [
   { label: '无打印缩放', value: 'none' },
   { label: '适应纸张大小', value: 'fit' },
@@ -83,17 +89,17 @@ const scalingOptions = [
   { label: '自定义缩放', value: 'custom' },
 ]
 
-const marginPreset = ref('normal')
+const marginPreset = ref(settings.marginPreset)
 const marginOptions = [
   { label: '常规', value: 'normal' },
   { label: '窄', value: 'narrow' },
   { label: '宽', value: 'wide' },
   { label: '自定义', value: 'custom' },
 ]
-const marginTop = ref(25.4)
-const marginBottom = ref(25.4)
-const marginLeft = ref(31.8)
-const marginRight = ref(31.8)
+const marginTop = ref(settings.marginTop)
+const marginBottom = ref(settings.marginBottom)
+const marginLeft = ref(settings.marginLeft)
+const marginRight = ref(settings.marginRight)
 const showMarginAdjust = ref(false)
 
 const viewMode = ref<'normal' | 'pageBreak'>('normal')
@@ -145,9 +151,19 @@ const formatFileSize = (bytes: number): string => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
+const parseExcelSheetNames = async (file: File): Promise<string[]> => {
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+    return workbook.SheetNames || []
+  } catch {
+    return []
+  }
+}
+
 const addFiles = (fileList: FileList | File[]) => {
   const filesArray = Array.from(fileList)
-  filesArray.forEach(file => {
+  filesArray.forEach(async (file) => {
     const id = Date.now() + Math.random().toString(36).slice(2)
     const newFile: PrintFile = {
       id,
@@ -160,6 +176,16 @@ const addFiles = (fileList: FileList | File[]) => {
     files.value.push(newFile)
     if (!activeFileId.value) {
       activeFileId.value = id
+      if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+        const sheets = await parseExcelSheetNames(file)
+        excelSheetNames.value = sheets
+        selectedSheets.value = [...sheets]
+        showSheetSelector.value = sheets.length > 1
+      } else {
+        excelSheetNames.value = []
+        selectedSheets.value = []
+        showSheetSelector.value = false
+      }
     }
   })
 }
@@ -208,15 +234,9 @@ let dragEnterCount = 0
 
 const injectPreviewColors = () => {
   const root = document.documentElement
-  if (isDark.value) {
-    root.style.setProperty('--preview-wrapper-bg', '#1f2937')
-    root.style.setProperty('--preview-wrapper-shadow', '0 4px 20px rgba(0, 0, 0, 0.5)')
-    root.style.setProperty('--preview-wrapper-text', '#e5e7eb')
-  } else {
-    root.style.setProperty('--preview-wrapper-bg', '#ffffff')
-    root.style.setProperty('--preview-wrapper-shadow', '0 4px 20px rgba(0, 0, 0, 0.15)')
-    root.style.setProperty('--preview-wrapper-text', '#1f2328')
-  }
+  root.style.setProperty('--preview-wrapper-bg', '#ffffff')
+  root.style.setProperty('--preview-wrapper-shadow', '0 4px 20px rgba(0, 0, 0, 0.15)')
+  root.style.setProperty('--preview-wrapper-text', '#1f2328')
 }
 
 const setupTauriDragDrop = async () => {
@@ -270,10 +290,24 @@ const handleSelectionChange = (data: any) => {
   currentSelection.value = data
 }
 
-const selectFile = (id: string) => {
+const selectFile = async (id: string) => {
   activeFileId.value = id
   currentPage.value = 1
   currentSelection.value = null
+  
+  const file = files.value.find(f => f.id === id)
+  if (file) {
+    if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+      const sheets = await parseExcelSheetNames(file.file)
+      excelSheetNames.value = sheets
+      selectedSheets.value = [...sheets]
+      showSheetSelector.value = sheets.length > 1
+    } else {
+      excelSheetNames.value = []
+      selectedSheets.value = []
+      showSheetSelector.value = false
+    }
+  }
 }
 
 const toggleSelectFile = (id: string, e: Event) => {
@@ -348,9 +382,9 @@ const refreshPrinters = async () => {
     if (result.length > 0 && !printerName.value) {
       printerName.value = result[0]
     }
-    notification.success({ title: '刷新成功', content: `已刷新 ${result.length} 台打印机` })
+    notifySuccess('刷新成功', `已刷新 ${result.length} 台打印机`)
   } catch (e) {
-    notification.error({ title: '刷新失败', content: (e as Error).message })
+    notifyError('刷新失败', (e as Error).message)
   }
 }
 
@@ -360,7 +394,7 @@ const scanNetworkPrinters = async () => {
     const result = await invoke<any[]>('get_cached_network_printers')
     networkPrinters.value = result
   } catch (e) {
-    notification.error({ title: '扫描失败', content: (e as Error).message })
+    notifyError('扫描失败', (e as Error).message)
   } finally {
     isScanningNetwork.value = false
   }
@@ -368,7 +402,7 @@ const scanNetworkPrinters = async () => {
 
 const addNetworkPrinter = async () => {
   if (!newPrinterPath.value.trim()) {
-    notification.warning({ title: '请输入打印机路径', content: '例如 \\\\server\\printer' })
+    notifyInfo('请输入打印机路径', '例如 \\\\server\\printer')
     return
   }
   isAddingPrinter.value = true
@@ -377,13 +411,13 @@ const addNetworkPrinter = async () => {
       uncPath: newPrinterPath.value.trim()
     })
     if (result) {
-      notification.success({ title: '添加成功', content: '网络打印机已添加' })
+      notifySuccess('添加成功', '网络打印机已添加')
       newPrinterPath.value = ''
       await loadPrinters()
       await scanNetworkPrinters()
     }
   } catch (e) {
-    notification.error({ title: '添加失败', content: (e as Error).message })
+    notifyError('添加失败', (e as Error).message)
   } finally {
     isAddingPrinter.value = false
   }
@@ -393,12 +427,12 @@ const testPrinter = async (name: string) => {
   try {
     const online = await invoke<boolean>('test_printer_connection', { printerName: name })
     if (online) {
-      notification.success({ title: '打印机在线', content: name })
+      notifySuccess('打印机在线', name)
     } else {
-      notification.warning({ title: '打印机离线', content: name })
+      notifyInfo('打印机离线', name)
     }
   } catch (e) {
-    notification.error({ title: '测试失败', content: (e as Error).message })
+    notifyError('测试失败', (e as Error).message)
   }
 }
 
@@ -417,11 +451,26 @@ const printSingleFile = async (fileItem: PrintFile): Promise<boolean> => {
     const arrayBuffer = await fileItem.file.arrayBuffer()
     const data = Array.from(new Uint8Array(arrayBuffer))
 
+    const isExcel = fileItem.name.toLowerCase().endsWith('.xlsx') || fileItem.name.toLowerCase().endsWith('.xls')
+    const sheetNames = isExcel && selectedSheets.value.length > 0 ? selectedSheets.value : undefined
+
+    let printArea = undefined
+    if (currentSelection.value && currentSelection.value.type === 'excel') {
+      printArea = {
+        startRow: currentSelection.value.startRow,
+        startCol: currentSelection.value.startCol,
+        endRow: currentSelection.value.endRow,
+        endCol: currentSelection.value.endCol,
+      }
+    }
+
     const result = await invoke<boolean>('print_file', {
       data,
       fileName: fileItem.name,
       printer: printerName.value || null,
-      copies: copies.value
+      copies: copies.value,
+      sheetNames,
+      printArea,
     })
 
     return result
@@ -431,16 +480,27 @@ const printSingleFile = async (fileItem: PrintFile): Promise<boolean> => {
   }
 }
 
+const handleCancelPrint = async () => {
+  try {
+    await invoke('cancel_print')
+    notifyInfo('取消打印', '已发送取消打印指令')
+  } catch (e) {
+    console.error('Cancel print error:', e)
+  }
+}
+
 const handlePrint = async () => {
   if (!canPrint.value) return
   isPrinting.value = true
 
+  await saveSettings()
+
   if (printRange.value === 'selection' && currentSelection.value) {
     try {
       await printSelection()
-      notification.success({ title: '打印成功', content: '选定内容已发送到打印机' })
+      notifySuccess('打印成功', '选定内容已发送到打印机')
     } catch (e) {
-      notification.error({ title: '打印失败', content: '选定内容打印失败' })
+      notifyError('打印失败', '选定内容打印失败')
     }
     isPrinting.value = false
     return
@@ -466,9 +526,9 @@ const handlePrint = async () => {
     fileItem.status = result ? 'done' : 'error'
     
     if (result) {
-      notification.success({ title: '打印成功', content: `${fileItem.name} 已发送到打印机` })
+      notifySuccess('打印成功', `${fileItem.name} 已发送到打印机`)
     } else {
-      notification.error({ title: '打印失败', content: `${fileItem.name} 打印失败` })
+      notifyError('打印失败', `${fileItem.name} 打印失败`)
     }
   } else {
     let success = 0
@@ -487,10 +547,7 @@ const handlePrint = async () => {
       }
     }
 
-    notification.success({
-      title: '批量打印完成',
-      content: `成功 ${success} 个，失败 ${failed} 个`
-    })
+    notifySuccess('批量打印完成', `成功 ${success} 个，失败 ${failed} 个`)
   }
 
   isPrinting.value = false
@@ -585,13 +642,42 @@ const applyMarginPreset = () => {
 
 watch(marginPreset, applyMarginPreset)
 
-watch(isDark, injectPreviewColors, { immediate: true })
 
-onMounted(() => {
+
+const checkLibreOffice = async () => {
+  try {
+    const result = await invoke<boolean>('has_libreoffice')
+    hasLibreOffice.value = result
+  } catch {
+    hasLibreOffice.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadSettings()
+  copies.value = settings.copies
+  printOrder.value = settings.printOrder
+  paperSize.value = settings.paperSize
+  orientation.value = settings.orientation
+  printSides.value = settings.printSides
+  printRange.value = settings.printRange
+  pageFrom.value = settings.pageFrom
+  pageTo.value = settings.pageTo
+  printColor.value = settings.printColor
+  pagesPerSheet.value = settings.pagesPerSheet
+  scaling.value = settings.scaling
+  scalePercent.value = settings.scalePercent
+  marginPreset.value = settings.marginPreset
+  marginTop.value = settings.marginTop
+  marginBottom.value = settings.marginBottom
+  marginLeft.value = settings.marginLeft
+  marginRight.value = settings.marginRight
+  
   injectPreviewColors()
   loadPrinters()
   scanNetworkPrinters()
   setupTauriDragDrop()
+  checkLibreOffice()
 })
 
 onUnmounted(() => {
@@ -602,7 +688,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="print-page h-full flex flex-col rounded-lg overflow-hidden border shadow-sm" :class="isDark ? 'theme-dark' : 'theme-light'">
+  <div class="print-page h-full flex flex-col rounded-lg overflow-hidden border shadow-sm theme-light">
     <!-- 顶部工具栏 -->
     <div class="toolbar flex-shrink-0 border-b px-4 py-2.5 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -644,6 +730,14 @@ onUnmounted(() => {
           </template>
           {{ printRange === 'selection' ? '打印选定内容' : (files.length > 1 ? `批量打印 (${files.length})` : '打印') }}
         </NButton>
+        <NButton 
+          size="small" 
+          :loading="isPrinting" 
+          :disabled="!isPrinting"
+          @click="handleCancelPrint"
+        >
+          取消打印
+        </NButton>
       </div>
     </div>
 
@@ -684,7 +778,7 @@ onUnmounted(() => {
           <div
             v-for="fileItem in files"
             :key="fileItem.id"
-            class="file-thumb flex-shrink-0 w-24 h-28 rounded border cursor-pointer flex flex-col items-center p-1.5 transition-all"
+            class="file-thumb flex-shrink-0 w-24 h-28 rounded border cursor-pointer flex flex-col items-center p-1.5 transition-all relative"
             :class="{ 
               'active': fileItem.id === activeFileId,
               'selected': fileItem.selected 
@@ -697,6 +791,11 @@ onUnmounted(() => {
                 :class="fileItem.selected ? 'bg-primary border-primary text-white' : 'bg-transparent'"
               >
                 <CheckmarkOutline v-if="fileItem.selected" />
+              </div>
+            </div>
+            <div class="thumb-delete absolute top-1 right-1 z-10" @click.stop="removeFile(fileItem.id, $event)">
+              <div class="w-4 h-4 rounded flex items-center justify-center text-xs hover:bg-red-100 hover:text-red-500 transition-colors">
+                <NIcon size="12"><TrashOutline /></NIcon>
               </div>
             </div>
             <div class="thumb-icon text-2xl mb-1 mt-2">📄</div>
@@ -894,7 +993,7 @@ onUnmounted(() => {
                   <span class="opacity-60">到</span>
                   <NInputNumber v-model:value="pageTo" :min="1" size="small" placeholder="结束页" style="width: 100px;" />
                 </div>
-                <div v-if="printRange === 'selection'" class="text-xs p-2 rounded" :class="currentSelection ? 'text-green-500 bg-green-50 dark:bg-green-900/20' : 'opacity-70 ' + (isDark ? 'bg-gray-700/50' : 'bg-gray-100')">
+                <div v-if="printRange === 'selection'" :class="['text-xs p-2 rounded', currentSelection ? 'text-green-500 bg-green-50' : 'opacity-70 bg-gray-100']">
                   <span v-if="currentSelection && currentSelection.type === 'excel'">
                     已选 {{ currentSelection.endRow - currentSelection.startRow + 1 }} 行 × {{ currentSelection.endCol - currentSelection.startCol + 1 }} 列
                     <span v-if="currentSelection.sheetName" class="opacity-70">({{ currentSelection.sheetName }})</span>
@@ -907,6 +1006,33 @@ onUnmounted(() => {
                   </span>
                   <NButton v-if="currentSelection" size="tiny" text @click="printPreviewRef?.clearSelection()">清除选择</NButton>
                 </div>
+              </div>
+            </div>
+
+            <!-- Excel 工作表选择 -->
+            <div v-if="showSheetSelector" class="setting-section">
+              <div class="setting-label">选择工作表</div>
+              <div class="space-y-2">
+                <NCheckboxGroup v-model:value="selectedSheets" class="grid grid-cols-2 gap-2">
+                  <NCheckbox
+                    v-for="sheet in excelSheetNames"
+                    :key="sheet"
+                    :value="sheet"
+                    :label="sheet"
+                  />
+                </NCheckboxGroup>
+                <div class="flex gap-2">
+                  <NButton size="tiny" text @click="selectedSheets = [...excelSheetNames]">全选</NButton>
+                  <NButton size="tiny" text @click="selectedSheets = []">清空</NButton>
+                </div>
+              </div>
+            </div>
+
+            <!-- LibreOffice 状态提示 -->
+            <div v-if="!hasLibreOffice && (activeFile && (activeFile.name.endsWith('.xlsx') || activeFile.name.endsWith('.xls') || activeFile.name.endsWith('.docx') || activeFile.name.endsWith('.doc')))" class="setting-section">
+              <div class="text-xs p-2 rounded bg-yellow-50 text-yellow-700 flex items-center gap-2">
+                <NIcon size="14"><WarningOutline /></NIcon>
+                <span>未检测到 LibreOffice，将使用系统默认程序打印。建议安装 LibreOffice 以获得更好的打印效果。</span>
               </div>
             </div>
 
@@ -1101,7 +1227,7 @@ onUnmounted(() => {
   >
     <div class="printer-manager">
       <!-- 添加打印机 -->
-      <div class="mb-4 p-3 rounded-lg" :class="isDark ? 'bg-gray-700/50' : 'bg-gray-50'">
+      <div class="mb-4 p-3 rounded-lg bg-gray-50">
         <div class="text-sm font-medium mb-2">添加网络打印机</div>
         <div class="flex items-center gap-2">
           <NInput
@@ -1139,7 +1265,7 @@ onUnmounted(() => {
         </NButton>
       </div>
 
-      <div class="printer-list h-64 overflow-y-auto border rounded" :class="isDark ? 'border-gray-600' : 'border-gray-200'">
+      <div class="printer-list h-64 overflow-y-auto border rounded border-gray-200">
         <NSpin v-if="isScanningNetwork" :show="true">
           <div class="h-full flex items-center justify-center">
             <span class="opacity-60">正在扫描网络打印机...</span>

@@ -4,9 +4,7 @@ import { NInput, NButton, NIcon, NFormItem, NForm, NSelect } from 'naive-ui'
 import { SwapHorizontalOutline } from '@vicons/ionicons5'
 import ToolLayout from '../../components/common/ToolLayout.vue'
 import ActionBar from '../../components/common/ActionBar.vue'
-import { useNotification } from 'naive-ui'
-
-const notification = useNotification()
+import { notifySuccess, notifyError } from '../../composables/useNotification'
 
 const inputText = ref('')
 const outputText = ref('')
@@ -23,9 +21,9 @@ const handleConvert = () => {
     } else {
       outputText.value = unicodeToText(inputText.value)
     }
-    notification.success({ title: '转换成功', content: 'Unicode转换完成' })
+    notifySuccess('转换成功', 'Unicode转换完成')
   } catch (e) {
-    notification.error({ title: '转换失败', content: (e as Error).message })
+    notifyError('转换失败', (e as Error).message)
   }
 }
 
@@ -67,9 +65,9 @@ const handleCopy = async () => {
   if (!outputText.value) return
   try {
     await navigator.clipboard.writeText(outputText.value)
-    notification.success({ title: '复制成功', content: '结果已复制到剪贴板' })
+    notifySuccess('复制成功', '结果已复制到剪贴板')
   } catch (e) {
-    notification.error({ title: '复制失败', content: (e as Error).message })
+    notifyError('复制失败', (e as Error).message)
   }
 }
 

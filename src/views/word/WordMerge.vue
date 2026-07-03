@@ -8,7 +8,6 @@
 -->
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 import {
   NButton,
   NCard,
@@ -20,9 +19,9 @@ import {
   NRadio,
   NSelect,
   NList,
-  NListItem,
-  useNotification
+  NListItem
 } from 'naive-ui'
+import { notifySuccess, notifyError, notifyWarning } from '../../composables/useNotification'
 import {
   Document,
   Packer,
@@ -43,9 +42,6 @@ import ToolLayout from '../../components/common/ToolLayout.vue'
 import FileDropZone from '../../components/common/FileDropZone.vue'
 import WordPreview from '../../components/common/WordPreview.vue'
 import DetachablePreview from '../../components/common/DetachablePreview.vue'
-
-const notification = useNotification()
-const { isDark } = useTheme()
 
 // 上传的文件列表
 const fileList = ref<{ name: string; path: string; size?: number; file?: File }[]>([])
@@ -88,13 +84,13 @@ const handleFilesSelected = (files: { name: string; path: string; size?: number;
 // 执行合并
 const handleMerge = async () => {
   if (fileList.value.length < 2) {
-    notification.warning({ title: '提示', content: '请上传至少2个Word文档进行合并' })
+    notifyWarning('提示', '请上传至少2个Word文档进行合并')
     return
   }
 
   const validFiles = fileList.value.filter(f => f.file)
   if (validFiles.length < 2) {
-    notification.warning({ title: '提示', content: '需要至少2个有效文件' })
+    notifyWarning('提示', '需要至少2个有效文件')
     return
   }
 
@@ -183,13 +179,13 @@ const handleMerge = async () => {
       detachableRef.value.syncContent()
     }
 
-    notification.success({ title: '合并完成', content: '文档合并成功，可以下载' })
+    notifySuccess('合并完成', '文档合并成功，可以下载')
   } catch (error) {
     processResult.value = {
       status: 'error',
       message: (error as Error).message
     }
-    notification.error({ title: '合并失败', content: (error as Error).message })
+    notifyError('合并失败', (error as Error).message)
   } finally {
     isProcessing.value = false
   }
@@ -278,7 +274,7 @@ const handleClear = () => {
       <div class="space-y-4">
         <!-- 文件上传 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             上传Word文档（至少2个）
           </div>
           <FileDropZone
@@ -286,7 +282,7 @@ const handleClear = () => {
             :multiple="true"
             @files-selected="handleFilesSelected"
           />
-          <div class="mt-1 text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+          <div class="mt-1 text-xs text-gray-400">
             支持 .docx 格式，最多20个文件，按上传顺序合并
           </div>
         </div>
@@ -295,7 +291,7 @@ const handleClear = () => {
 
         <!-- 合并方式 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             合并方式
           </div>
           <NRadioGroup v-model:value="mergeSettings.mergeMode">
@@ -314,14 +310,14 @@ const handleClear = () => {
 
         <!-- 分隔方式 -->
         <div>
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             文档分隔方式
           </div>
           <NSelect
             v-model:value="mergeSettings.separator"
             :options="separatorOptions"
           />
-          <div class="mt-1 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+          <div class="mt-1 text-xs text-gray-500">
             分页符：每个文档在新页面开始<br/>
             分节符：每个文档作为新的节（可设置不同页面格式）<br/>
             无分隔：文档内容连续排列
@@ -332,11 +328,10 @@ const handleClear = () => {
 
         <!-- 章节标题设置（仅章节模式） -->
         <div v-if="mergeSettings.mergeMode === 'chapter'">
-          <div class="mb-2 text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+          <div class="mb-2 text-sm font-medium text-gray-700">
             章节标题设置
           </div>
-          <div class="p-3 rounded-lg border"
-            :class="isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'"
+          <div class="p-3 rounded-lg border border-gray-200 bg-gray-50"
           >
             <div class="flex items-center gap-2 mb-2">
               <input
@@ -347,7 +342,7 @@ const handleClear = () => {
               <span class="text-sm">添加章节标题</span>
             </div>
             <div v-if="mergeSettings.addChapterTitle" class="mt-2">
-              <div class="text-xs mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+              <div class="text-xs mb-1 text-gray-500">
                 标题样式
               </div>
               <NRadioGroup v-model:value="mergeSettings.chapterTitleStyle">
@@ -391,10 +386,9 @@ const handleClear = () => {
         class="h-full"
       >
         <div class="h-full flex flex-col">
-          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0"
-               :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'">
+          <div class="flex items-center gap-2 px-3 py-1.5 border-b flex-shrink-0 border-gray-200 bg-gray-50">
             <div class="flex-1 flex items-center gap-2">
-              <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+              <span class="text-xs text-gray-500">
                 {{ previewBuffer ? '合并结果预览' : '待合并' }}
               </span>
               <span v-if="processResult?.status === 'success'" class="text-xs text-green-500">
@@ -417,17 +411,15 @@ const handleClear = () => {
           </div>
 
           <div class="flex-1 min-h-0 flex flex-col">
-            <div v-if="fileList.length > 0" class="px-3 py-2 border-b flex-shrink-0"
-                 :class="isDark ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50'">
-              <div class="text-xs font-medium mb-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+            <div v-if="fileList.length > 0" class="px-3 py-2 border-b flex-shrink-0 border-gray-200 bg-gray-50/50">
+              <div class="text-xs font-medium mb-1 text-gray-500">
                 待合并文档（{{ fileList.length }}个）
               </div>
               <div class="flex flex-wrap gap-1">
                 <span
                   v-for="(file, index) in fileList"
                   :key="index"
-                  class="text-xs px-2 py-0.5 rounded"
-                  :class="isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'"
+                  class="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600"
                 >
                   {{ index + 1 }}. {{ file.name }}
                 </span>
@@ -440,8 +432,7 @@ const handleClear = () => {
                 :array-buffer="previewBuffer"
                 class="h-full"
               />
-              <div v-else class="h-full flex items-center justify-center"
-                   :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+              <div v-else class="h-full flex items-center justify-center text-gray-400">
                 <div class="text-center text-sm space-y-2">
                   <div v-if="fileList.length < 2">
                     请上传至少2个Word文档进行合并
